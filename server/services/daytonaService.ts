@@ -138,8 +138,8 @@ class DaytonaService {
     try {
       console.log(`Reading files from: ${projectPath}`);
 
-      // Collect all files and directories
-      const { directories, files } = await this.collectFilesAndDirectories(projectPath, '/workspace');
+      // Collect all files and directories (using relative path 'workspace' instead of '/workspace')
+      const { directories, files } = await this.collectFilesAndDirectories(projectPath, 'workspace');
 
       console.log(`Found ${directories.length} directories and ${files.length} files to upload`);
 
@@ -241,7 +241,7 @@ class DaytonaService {
     try {
       // Run npm install in the workspace root
       console.log('Running npm install...');
-      const response = await sandbox.process.executeCommand('cd /workspace && npm install');
+      const response = await sandbox.process.executeCommand('cd workspace && npm install');
       console.log(`npm install output: ${response.result}`);
 
       console.log(`Dependencies installed successfully in sandbox ${sandboxId}`);
@@ -265,7 +265,7 @@ class DaytonaService {
     try {
       // Run npm start in the workspace (runs concurrently for client and server)
       console.log('Starting application with npm start...');
-      const response = await sandbox.process.executeCommand('cd /workspace && nohup npm start > /tmp/app.log 2>&1 &');
+      const response = await sandbox.process.executeCommand('cd workspace && nohup npm start > /tmp/app.log 2>&1 &');
       console.log(`npm start output: ${response.result}`);
 
       console.log(`Application started successfully in sandbox ${sandboxId}`);
