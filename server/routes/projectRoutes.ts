@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { requireUser } from './middlewares/auth.js';
 import ProjectService from '../services/projectService.js';
+import TemplateService from '../services/templateService.js';
 
 const router = express.Router();
 
@@ -163,6 +164,43 @@ router.delete('/:id', requireUser, async (req: Request, res: Response) => {
     console.error('[DELETE /api/projects/:id] Error deleting project:', error);
     res.status(500).json({
       error: error.message || 'Failed to delete project',
+    });
+  }
+});
+
+// Description: Render vite_react template to temp folder for testing
+// Endpoint: POST /api/projects/test-render
+// Request: { project_name: string }
+// Response: { outputPath: string, message: string }
+router.post('/test-render', requireUser, async (req: Request, res: Response) => {
+  try {
+    console.log('[POST /api/projects/test-render] Testing template rendering');
+
+    const { project_name } = req.body;
+
+    if (!project_name || !project_name.trim()) {
+      console.warn('[POST /api/projects/test-render] Missing project_name');
+      return res.status(400).json({ error: 'project_name is required' });
+    }
+
+    // Render template to temp folder with required variables
+    const outputPath = await TemplateService.renderTemplateToTemp({
+      project_name: project_name.trim(),
+      options: {
+        auth: true, // Always true
+        db_type: 'nosql', // Always nosql
+      },
+    });
+
+    console.log(`[POST /api/projects/test-render] Template rendered to: ${outputPath}`);
+    res.status(200).json({
+      outputPath,
+      message: 'Template rendered successfully to temp folder',
+    });
+  } catch (error) {
+    console.error('[POST /api/projects/test-render] Error rendering template:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to render template',
     });
   }
 });

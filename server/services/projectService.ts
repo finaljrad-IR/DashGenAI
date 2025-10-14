@@ -1,20 +1,6 @@
-import nunjucks from 'nunjucks';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 import Project, { IProject } from '../models/Project.js';
 import mongoose from 'mongoose';
-
-// Get __dirname equivalent in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Configure Nunjucks
-const templatesPath = path.join(__dirname, '../templates');
-nunjucks.configure(templatesPath, {
-  autoescape: true,
-  noCache: process.env.NODE_ENV === 'development',
-});
+import TemplateService from './templateService.js';
 
 export interface CreateProjectInput {
   name: string;
@@ -47,21 +33,22 @@ class ProjectService {
         status: 'active',
       });
 
-      // Attempt to render template if template data exists
-      if (input.templateData && Object.keys(input.templateData).length > 0) {
-        try {
-          const renderedOutput = await this.renderTemplate(
-            'dashboard.html',
-            input.templateData
-          );
-          project.renderedOutput = renderedOutput;
-          console.log('[ProjectService] Template rendered successfully');
-        } catch (templateError) {
-          console.warn(
-            `[ProjectService] Template rendering failed: ${templateError.message}`
-          );
-          // Continue without rendered output
-        }
+      // Always render vite_react template with required variables
+      try {
+        const renderedOutput = await TemplateService.renderViteReactTemplate({
+          project_name: input.name,
+          options: {
+            auth: true, // Always true as per requirements
+            db_type: 'nosql', // Always 'nosql' as per requirements
+          },
+        });
+        project.renderedOutput = renderedOutput;
+        console.log('[ProjectService] vite_react template rendered successfully');
+      } catch (templateError) {
+        console.warn(
+          `[ProjectService] Template rendering failed: ${templateError.message}`
+        );
+        // Continue without rendered output
       }
 
       await project.save();
@@ -176,15 +163,18 @@ class ProjectService {
       if (updates.templateData !== undefined)
         project.templateData = updates.templateData;
 
-      // Re-render template if template data changed
-      if (updates.templateData && Object.keys(updates.templateData).length > 0) {
+      // Re-render vite_react template if name changed
+      if (updates.name !== undefined) {
         try {
-          const renderedOutput = await this.renderTemplate(
-            'dashboard.html',
-            updates.templateData
-          );
+          const renderedOutput = await TemplateService.renderViteReactTemplate({
+            project_name: project.name,
+            options: {
+              auth: true, // Always true as per requirements
+              db_type: 'nosql', // Always 'nosql' as per requirements
+            },
+          });
           project.renderedOutput = renderedOutput;
-          console.log('[ProjectService] Template re-rendered successfully');
+          console.log('[ProjectService] vite_react template re-rendered successfully');
         } catch (templateError) {
           console.warn(
             `[ProjectService] Template re-rendering failed: ${templateError.message}`
@@ -235,25 +225,6 @@ class ProjectService {
     }
   }
 
-  /**
-   * Render a Nunjucks template with data
-   */
-  async renderTemplate(
-    templateName: string,
-    data: Record<string, unknown>
-  ): Promise<string> {
-    try {
-      console.log(`[ProjectService] Rendering template: ${templateName}`);
-      const rendered = nunjucks.render(templateName, data);
-      return rendered;
-    } catch (error) {
-      console.error(
-        `[ProjectService] Template rendering error: ${error.message}`,
-        error
-      );
-      throw new Error(`Template rendering failed: ${error.message}`);
-    }
-  }
 }
 
 export default new ProjectService();
