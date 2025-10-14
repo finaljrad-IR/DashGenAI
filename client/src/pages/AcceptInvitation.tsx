@@ -49,7 +49,8 @@ export function AcceptInvitation() {
 
   const loadInvitationDetails = useCallback(async () => {
     if (!token) return
-    
+
+    setIsLoading(true)
     try {
       const response = await getInvitationDetails(token)
       setInvitation(response)
@@ -60,8 +61,10 @@ export function AcceptInvitation() {
         description: errorMessage,
         variant: "destructive",
       })
+    } finally {
+      setIsLoading(false)
     }
-  }, [token])
+  }, [token, toast])
 
   const calculatePasswordStrength = (pwd: string) => {
     let strength = 0;
@@ -88,10 +91,10 @@ export function AcceptInvitation() {
   const onSubmit = useCallback(async (data: FormData) => {
     if (!token) return
 
-    setIsLoading(true)
+    setIsSubmitting(true)
     try {
       const response = await acceptInvitation(token, data.password)
-      
+
       if (response.accessToken) {
         localStorage.setItem('accessToken', response.accessToken)
       }
@@ -112,9 +115,9 @@ export function AcceptInvitation() {
         variant: "destructive",
       })
     } finally {
-      setIsLoading(false)
+      setIsSubmitting(false)
     }
-  }, [token, navigate])
+  }, [token, navigate, toast])
 
   if (isLoading) {
     return (

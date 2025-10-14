@@ -28,6 +28,7 @@ export function DashboardOwner() {
   const loadDashboard = useCallback(async () => {
     if (!id) return
 
+    setIsLoading(true)
     try {
       const response = await getDashboard(id)
       setDashboard(response)
@@ -38,8 +39,10 @@ export function DashboardOwner() {
         description: errorMessage,
         variant: "destructive",
       })
+    } finally {
+      setIsLoading(false)
     }
-  }, [id]);
+  }, [id, toast]);
 
   const handleDashboardUpdate = () => {
     console.log('Dashboard updated, triggering refresh');

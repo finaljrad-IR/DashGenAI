@@ -27,7 +27,7 @@ export const sendInvitations = (data: { dashboardId: string; emails: string[]; m
 // Endpoint: POST /api/invitations/accept
 // Request: { token: string, password: string }
 // Response: { success: boolean, message: string, dashboardId: string, accessToken: string }
-export const acceptInvitation = (data: { token: string; password: string }) => {
+export const acceptInvitation = (token: string, password: string) => {
   // Mocking the response
   return new Promise((resolve) => {
     setTimeout(() => {
@@ -41,7 +41,8 @@ export const acceptInvitation = (data: { token: string; password: string }) => {
   });
   // Uncomment the below lines to make an actual API call
   // try {
-  //   return await api.post('/api/invitations/accept', data);
+  //   const response = await api.post('/api/invitations/accept', { token, password });
+  //   return response.data;
   // } catch (error) {
   //   throw new Error(error?.response?.data?.message || error.message);
   // }
@@ -50,24 +51,23 @@ export const acceptInvitation = (data: { token: string; password: string }) => {
 // Description: Get invitation details by token
 // Endpoint: GET /api/invitations/:token
 // Request: {}
-// Response: { invitation: { email: string, dashboardName: string, inviterEmail: string, message?: string } }
+// Response: { email: string, dashboardName: string, inviterEmail: string, message?: string }
 export const getInvitationDetails = (token: string) => {
   // Mocking the response
   return new Promise((resolve) => {
     setTimeout(() => {
       resolve({
-        invitation: {
-          email: 'invited@example.com',
-          dashboardName: 'Sales Analytics Dashboard',
-          inviterEmail: 'owner@example.com',
-          message: 'Check out this amazing dashboard I created!'
-        }
+        email: 'invited@example.com',
+        dashboardName: 'Sales Analytics Dashboard',
+        inviterEmail: 'owner@example.com',
+        message: 'Check out this amazing dashboard I created!'
       });
     }, 500);
   });
   // Uncomment the below lines to make an actual API call
   // try {
-  //   return await api.get(`/api/invitations/${token}`);
+  //   const response = await api.get(`/api/invitations/${token}`);
+  //   return response.data.invitation;
   // } catch (error) {
   //   throw new Error(error?.response?.data?.message || error.message);
   // }

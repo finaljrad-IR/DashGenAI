@@ -1,219 +1,215 @@
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { X, Mail, Plus, Loader2, CheckCircle2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
-import { sendInvitations } from '@/api/invitations';
-import { useToast } from '@/hooks/useToast';
+import { useState } from "react"
+import { X, Mail, Plus, Loader2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
+import { sendInvitations } from "@/api/invitations"
+import { useToast } from "@/hooks/useToast"
 
 interface InviteModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  dashboardId: string;
-}
-
-interface FormData {
-  email: string;
-  message: string;
+  isOpen: boolean
+  onClose: () => void
+  dashboardId: string
 }
 
 export function InviteModal({ isOpen, onClose, dashboardId }: InviteModalProps) {
-  const [emails, setEmails] = useState<string[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const { toast } = useToast();
-  const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm<FormData>();
+  const [emails, setEmails] = useState<string[]>([])
+  const [currentEmail, setCurrentEmail] = useState("")
+  const [message, setMessage] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const { toast } = useToast()
 
-  const currentEmail = watch('email');
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
 
   const addEmail = () => {
-    const email = currentEmail?.trim();
-    if (!email) return;
-
-    const emailRegex = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
-    if (!emailRegex.test(email)) {
-      toast({
-        title: 'Invalid Email',
-        description: 'Please enter a valid email address',
-        variant: 'destructive',
-      });
-      return;
+    const trimmedEmail = currentEmail.trim()
+    
+    if (!trimmedEmail) {
+      return
     }
 
-    if (emails.includes(email)) {
+    if (!validateEmail(trimmedEmail)) {
       toast({
-        title: 'Duplicate Email',
-        description: 'This email has already been added',
-        variant: 'destructive',
-      });
-      return;
+        title: "Invalid Email",
+        description: "Please enter a valid email address",
+        variant: "destructive",
+      })
+      return
     }
 
-    console.log('Adding email to invitation list:', email);
-    setEmails(prev => [...prev, email]);
-    setValue('email', '');
-  };
+    if (emails.includes(trimmedEmail)) {
+      toast({
+        title: "Duplicate Email",
+        description: "This email has already been added",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setEmails([...emails, trimmedEmail])
+    setCurrentEmail("")
+  }
 
   const removeEmail = (emailToRemove: string) => {
-    console.log('Removing email from invitation list:', emailToRemove);
-    setEmails(prev => prev.filter(e => e !== emailToRemove));
-  };
+    setEmails(emails.filter(email => email !== emailToRemove))
+  }
 
-  const onSubmit = async (data: FormData) => {
+  const handleSubmit = async () => {
     if (emails.length === 0) {
       toast({
-        title: 'No Recipients',
-        description: 'Please add at least one email address',
-        variant: 'destructive',
-      });
-      return;
+        title: "No Emails",
+        description: "Please add at least one email address",
+        variant: "destructive",
+      })
+      return
     }
 
-    console.log('Sending invitations to:', emails);
-    setIsSubmitting(true);
-
+    setIsLoading(true)
     try {
-      const response = await sendInvitations({
+      await sendInvitations({
         dashboardId,
         emails,
-        message: data.message || undefined
-      }) as any;
+        message: message.trim() || undefined,
+      })
 
-      console.log('Invitations sent successfully:', response);
-      
       toast({
-        title: 'Success!',
-        description: response.message,
-      });
+        title: "Invitations Sent",
+        description: `Successfully sent invitations to ${emails.length} user${emails.length > 1 ? 's' : ''}`,
+      })
 
-      setEmails([]);
-      reset();
-      onClose();
-    } catch (error: any) {
-      console.error('Failed to send invitations:', error);
+      // Reset form
+      setEmails([])
+      setCurrentEmail("")
+      setMessage("")
+      onClose()
+    } catch (error: unknown) {
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to send invitations',
-        variant: 'destructive',
-      });
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to send invitations. Please try again.",
+        variant: "destructive",
+      })
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false)
     }
-  };
+  }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      e.preventDefault();
-      addEmail();
+      e.preventDefault()
+      addEmail()
     }
-  };
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px] bg-background">
+      <DialogContent className="sm:max-w-[500px] bg-white dark:bg-gray-900">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">Invite Users to Your Dashboard</DialogTitle>
-          <DialogDescription>
-            Share your dashboard with team members. They'll receive an email invitation.
-          </DialogDescription>
+          <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Invite Users to Your Dashboard
+          </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 mt-4">
+        <div className="space-y-6 py-4">
+          {/* Email Input Section */}
           <div className="space-y-3">
-            <Label htmlFor="email" className="text-base font-medium">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
               Email Addresses
-            </Label>
+            </label>
             <div className="flex gap-2">
-              <div className="flex-1 relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <div className="relative flex-1">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
-                  id="email"
                   type="email"
                   placeholder="colleague@company.com"
-                  className="pl-9"
-                  {...register('email')}
-                  onKeyPress={handleKeyPress}
+                  value={currentEmail}
+                  onChange={(e) => setCurrentEmail(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="pl-10"
+                  disabled={isLoading}
                 />
               </div>
               <Button
                 type="button"
-                variant="outline"
                 onClick={addEmail}
-                disabled={!currentEmail?.trim()}
+                disabled={isLoading || !currentEmail.trim()}
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
               >
-                <Plus className="h-4 w-4 mr-2" />
-                Add
+                <Plus className="h-4 w-4" />
               </Button>
             </div>
 
+            {/* Email Tags */}
             {emails.length > 0 && (
-              <div className="flex flex-wrap gap-2 p-3 bg-secondary/30 rounded-lg border">
+              <div className="flex flex-wrap gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                 {emails.map((email) => (
                   <Badge
                     key={email}
                     variant="secondary"
-                    className="pl-3 pr-1 py-1.5 text-sm"
+                    className="pl-3 pr-1 py-1.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800"
                   >
-                    {email}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-auto p-1 ml-2 hover:bg-destructive/20"
+                    <span className="mr-1">{email}</span>
+                    <button
                       onClick={() => removeEmail(email)}
+                      disabled={isLoading}
+                      className="ml-1 hover:bg-blue-200 dark:hover:bg-blue-700 rounded-full p-0.5 transition-colors"
                     >
                       <X className="h-3 w-3" />
-                    </Button>
+                    </button>
                   </Badge>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="message" className="text-base font-medium">
+          {/* Optional Message */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
               Personal Message (Optional)
-            </Label>
+            </label>
             <Textarea
-              id="message"
               placeholder="Add a personal message to your invitation..."
-              className="min-h-[100px] resize-none"
-              {...register('message')}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              disabled={isLoading}
+              rows={4}
+              className="resize-none"
             />
           </div>
 
-          <div className="flex gap-3 justify-end pt-4 border-t">
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-2">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
-              disabled={isSubmitting}
+              disabled={isLoading}
+              className="flex-1"
             >
               Cancel
             </Button>
             <Button
-              type="submit"
-              disabled={isSubmitting || emails.length === 0}
-              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              type="button"
+              onClick={handleSubmit}
+              disabled={isLoading || emails.length === 0}
+              className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
             >
-              {isSubmitting ? (
+              {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Sending...
                 </>
               ) : (
-                <>
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Send Invitations ({emails.length})
-                </>
+                `Send Invitation${emails.length > 1 ? 's' : ''}`
               )}
             </Button>
           </div>
-        </form>
+        </div>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

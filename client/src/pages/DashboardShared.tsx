@@ -24,6 +24,7 @@ export function DashboardShared() {
   const loadDashboard = useCallback(async () => {
     if (!id) return
 
+    setIsLoading(true)
     try {
       const response = await getDashboard(id)
       setDashboard(response)
@@ -34,8 +35,10 @@ export function DashboardShared() {
         description: errorMessage,
         variant: "destructive",
       })
+    } finally {
+      setIsLoading(false)
     }
-  }, [id]);
+  }, [id, toast]);
 
   if (isLoading) {
     return (

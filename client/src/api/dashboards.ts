@@ -26,25 +26,24 @@ export const generateDashboard = (data: { email: string; mongoUri: string }) => 
 // Description: Get dashboard by ID
 // Endpoint: GET /api/dashboards/:id
 // Request: {}
-// Response: { dashboard: { _id: string, name: string, previewUrl: string, ownerId: string, createdAt: string } }
+// Response: { _id: string, name: string, previewUrl: string, ownerId: string, createdAt: string }
 export const getDashboard = (id: string) => {
   // Mocking the response
   return new Promise((resolve) => {
     setTimeout(() => {
       resolve({
-        dashboard: {
-          _id: id,
-          name: 'Sales Analytics Dashboard',
-          previewUrl: 'https://example-daytona-instance.com/preview',
-          ownerId: 'user123',
-          createdAt: new Date().toISOString()
-        }
+        _id: id,
+        name: 'Sales Analytics Dashboard',
+        previewUrl: 'https://example-daytona-instance.com/preview',
+        ownerId: 'user123',
+        createdAt: new Date().toISOString()
       });
     }, 500);
   });
   // Uncomment the below lines to make an actual API call
   // try {
-  //   return await api.get(`/api/dashboards/${id}`);
+  //   const response = await api.get(`/api/dashboards/${id}`);
+  //   return response.data.dashboard;
   // } catch (error) {
   //   throw new Error(error?.response?.data?.message || error.message);
   // }
