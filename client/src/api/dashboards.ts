@@ -117,7 +117,7 @@ export const updateDashboard = (id: string, data: { name: string }) => {
 // Description: Send chat message to modify dashboard
 // Endpoint: POST /api/dashboards/:id/chat
 // Request: { message: string }
-// Response: { success: boolean, reply: string, status: string }
+// Response: { success: boolean, reply: string, status: string, dashboardUpdated?: boolean }
 export const sendChatMessage = (id: string, message: string) => {
   // Mocking the response
   return new Promise((resolve) => {
@@ -132,7 +132,8 @@ export const sendChatMessage = (id: string, message: string) => {
       resolve({
         success: true,
         reply: randomResponse,
-        status: 'completed'
+        status: 'completed',
+        dashboardUpdated: true
       });
     }, 1500);
   });

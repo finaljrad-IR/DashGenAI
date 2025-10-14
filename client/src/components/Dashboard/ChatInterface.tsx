@@ -57,11 +57,12 @@ export function ChatInterface({ dashboardId, onDashboardUpdate }: ChatInterfaceP
     }
   };
 
-  const handleSendMessage = async () => {
-    if (!inputMessage.trim() || isLoading) return
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputMessage.trim() || isSending) return
 
     const userMessage = {
-      id: Date.now().toString(),
+      _id: Date.now().toString(),
       role: 'user' as const,
       content: inputMessage,
       timestamp: new Date().toISOString(),
@@ -69,22 +70,23 @@ export function ChatInterface({ dashboardId, onDashboardUpdate }: ChatInterfaceP
 
     setMessages(prev => [...prev, userMessage])
     setInputMessage('')
-    setIsLoading(true)
+    setIsSending(true)
 
     try {
       const response = await sendChatMessage(dashboardId, inputMessage)
-      
-      if (response.message) {
+
+      if (response.reply) {
         const assistantMessage = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant' as const,
-          content: response.message,
+          _id: (Date.now() + 1).toString(),
+          role: 'system' as const,
+          content: response.reply,
           timestamp: new Date().toISOString(),
         }
         setMessages(prev => [...prev, assistantMessage])
       }
 
-      if (response.dashboardUpdated) {
+      if (response.status === 'completed' && onDashboardUpdate) {
+        onDashboardUpdate()
         toast({
           title: "Dashboard Updated",
           description: "Your dashboard has been updated successfully.",
@@ -98,7 +100,7 @@ export function ChatInterface({ dashboardId, onDashboardUpdate }: ChatInterfaceP
         variant: "destructive",
       })
     } finally {
-      setIsLoading(false)
+      setIsSending(false)
     }
   };
 
