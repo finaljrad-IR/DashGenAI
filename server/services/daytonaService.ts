@@ -138,8 +138,38 @@ class DaytonaService {
     try {
       console.log(`Reading files from: ${projectPath}`);
 
-      // Upload all files from the project directory recursively
-      await this.uploadDirectory(sandbox, projectPath, '/workspace');
+      // Collect all files and directories
+      const { directories, files } = await this.collectFilesAndDirectories(projectPath, '/workspace');
+
+      console.log(`Found ${directories.length} directories and ${files.length} files to upload`);
+
+      // Create all directories first
+      console.log('Creating directory structure...');
+      for (const dir of directories) {
+        try {
+          await sandbox.fs.createFolder(dir, '755');
+          console.log(`Created directory: ${dir}`);
+        } catch (error) {
+          console.error(`Error creating directory ${dir}:`, error);
+          // Continue - directory might already exist
+        }
+      }
+
+      // Upload all files in batches using uploadFiles method
+      console.log('Uploading files...');
+      const batchSize = 50; // Upload 50 files at a time
+      for (let i = 0; i < files.length; i += batchSize) {
+        const batch = files.slice(i, i + batchSize);
+        console.log(`Uploading batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(files.length / batchSize)} (${batch.length} files)`);
+
+        try {
+          await sandbox.fs.uploadFiles(batch);
+          console.log(`Batch uploaded successfully`);
+        } catch (error) {
+          console.error(`Error uploading batch:`, error);
+          throw error;
+        }
+      }
 
       console.log(`Files uploaded successfully to sandbox ${sandboxId}`);
     } catch (error) {
@@ -149,24 +179,22 @@ class DaytonaService {
   }
 
   /**
-   * Recursively upload directory contents to sandbox
+   * Recursively collect all files and directories from a local path
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async uploadDirectory(sandbox: any, localPath: string, remotePath: string): Promise<void> {
-    const entries = await fs.readdir(localPath, { withFileTypes: true });
+  private async collectFilesAndDirectories(
+    localBasePath: string,
+    remoteBasePath: string,
+    currentLocalPath: string = localBasePath,
+    currentRemotePath: string = remoteBasePath
+  ): Promise<{ directories: string[]; files: Array<{ source: string; destination: string }> }> {
+    const directories: string[] = [];
+    const files: Array<{ source: string; destination: string }> = [];
 
-    // First, ensure the remote directory exists
-    try {
-      console.log(`Creating remote directory: ${remotePath}`);
-      await sandbox.process.executeCommand(`mkdir -p "${remotePath}"`);
-    } catch (error) {
-      console.error(`Error creating directory ${remotePath}:`, error);
-      // Continue anyway, directory might already exist
-    }
+    const entries = await fs.readdir(currentLocalPath, { withFileTypes: true });
 
     for (const entry of entries) {
-      const localFilePath = path.join(localPath, entry.name);
-      const remoteFilePath = path.join(remotePath, entry.name);
+      const localFilePath = path.join(currentLocalPath, entry.name);
+      const remoteFilePath = path.posix.join(currentRemotePath, entry.name);
 
       // Skip node_modules and other unnecessary directories
       if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist' || entry.name === 'build') {
@@ -175,20 +203,28 @@ class DaytonaService {
       }
 
       if (entry.isDirectory()) {
-        // Recursively upload subdirectories
-        await this.uploadDirectory(sandbox, localFilePath, remoteFilePath);
+        // Add directory to list
+        directories.push(remoteFilePath);
+
+        // Recursively collect from subdirectory
+        const subResults = await this.collectFilesAndDirectories(
+          localBasePath,
+          remoteBasePath,
+          localFilePath,
+          remoteFilePath
+        );
+        directories.push(...subResults.directories);
+        files.push(...subResults.files);
       } else {
-        // Upload file
-        try {
-          const fileContent = await fs.readFile(localFilePath);
-          await sandbox.fs.uploadFile(fileContent, remoteFilePath);
-          console.log(`Uploaded: ${remoteFilePath}`);
-        } catch (error) {
-          console.error(`Error uploading file ${remoteFilePath}:`, error);
-          throw error;
-        }
+        // Add file to list
+        files.push({
+          source: localFilePath,
+          destination: remoteFilePath
+        });
       }
     }
+
+    return { directories, files };
   }
 
   /**
