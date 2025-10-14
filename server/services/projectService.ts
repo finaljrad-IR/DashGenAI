@@ -41,15 +41,16 @@ class ProjectService {
 
       // Always render vite_react template with required variables
       try {
-        const renderedOutput = await TemplateService.renderViteReactTemplate({
+        const renderedOutputPath = await TemplateService.renderTemplateToTemp({
           project_name: input.name,
           options: {
             auth: true, // Always true as per requirements
             db_type: 'nosql', // Always 'nosql' as per requirements
           },
         });
-        project.renderedOutput = renderedOutput;
-        console.log('[ProjectService] vite_react template rendered successfully');
+        // Store just the folder name (last part of the path) for reference
+        project.renderedOutput = path.basename(renderedOutputPath);
+        console.log('[ProjectService] vite_react template rendered successfully to:', renderedOutputPath);
       } catch (templateError) {
         console.warn(
           `[ProjectService] Template rendering failed: ${templateError.message}`
@@ -177,15 +178,16 @@ class ProjectService {
       // Re-render vite_react template if name changed
       if (updates.name !== undefined) {
         try {
-          const renderedOutput = await TemplateService.renderViteReactTemplate({
+          const renderedOutputPath = await TemplateService.renderTemplateToTemp({
             project_name: project.name,
             options: {
               auth: true, // Always true as per requirements
               db_type: 'nosql', // Always 'nosql' as per requirements
             },
           });
-          project.renderedOutput = renderedOutput;
-          console.log('[ProjectService] vite_react template re-rendered successfully');
+          // Store just the folder name (last part of the path) for reference
+          project.renderedOutput = path.basename(renderedOutputPath);
+          console.log('[ProjectService] vite_react template re-rendered successfully to:', renderedOutputPath);
         } catch (templateError) {
           console.warn(
             `[ProjectService] Template re-rendering failed: ${templateError.message}`
