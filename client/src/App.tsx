@@ -6,7 +6,11 @@ import { Login } from "./pages/Login"
 import { Register } from "./pages/Register"
 import { ProtectedRoute } from "./components/ProtectedRoute"
 import { Layout } from "./components/Layout"
-import { BlankPage } from "./pages/BlankPage"
+import { Home } from "./pages/Home"
+import { DashboardOwner } from "./pages/DashboardOwner"
+import { DashboardShared } from "./pages/DashboardShared"
+import { AcceptInvitation } from "./pages/AcceptInvitation"
+import { MyDashboards } from "./pages/MyDashboards"
 
 function App() {
   return (
@@ -16,8 +20,11 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/" element={<ProtectedRoute> <Layout /> </ProtectedRoute>} />
-          <Route path="*" element={<BlankPage />} />
+          <Route path="/invite/accept/:token" element={<AcceptInvitation />} />
+          <Route path="/" element={<Home />} />
+          <Route path="/my-dashboards" element={<ProtectedRoute><Layout><MyDashboards /></Layout></ProtectedRoute>} />
+          <Route path="/dashboard/:id" element={<ProtectedRoute><DashboardOwner /></ProtectedRoute>} />
+          <Route path="/dashboard/:id/shared" element={<ProtectedRoute><DashboardShared /></ProtectedRoute>} />
         </Routes>
       </Router>
       <Toaster />
