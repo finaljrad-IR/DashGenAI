@@ -8,7 +8,10 @@ export interface IProject extends Document {
   databaseName?: string;
   templateData?: Record<string, unknown>;
   renderedOutput?: string;
-  status: 'active' | 'archived' | 'failed';
+  status: 'active' | 'archived' | 'failed' | 'generating' | 'deploying';
+  sandboxId?: string;
+  sandboxUrl?: string;
+  sandboxStatus?: 'creating' | 'running' | 'stopped' | 'failed';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -45,8 +48,20 @@ const projectSchema = new Schema<IProject>(
     },
     status: {
       type: String,
-      enum: ['active', 'archived', 'failed'],
-      default: 'active',
+      enum: ['active', 'archived', 'failed', 'generating', 'deploying'],
+      default: 'generating',
+    },
+    sandboxId: {
+      type: String,
+      trim: true,
+    },
+    sandboxUrl: {
+      type: String,
+      trim: true,
+    },
+    sandboxStatus: {
+      type: String,
+      enum: ['creating', 'running', 'stopped', 'failed'],
     },
   },
   {

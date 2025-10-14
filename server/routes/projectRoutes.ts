@@ -205,4 +205,56 @@ router.post('/test-render', requireUser, async (req: Request, res: Response) => 
   }
 });
 
+// Description: Get sandbox status for a project
+// Endpoint: GET /api/projects/:id/sandbox/status
+// Request: {}
+// Response: { sandboxStatus: string, sandboxUrl?: string }
+router.get('/:id/sandbox/status', requireUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    console.log(`[GET /api/projects/:id/sandbox/status] Getting sandbox status for project: ${id}`);
+
+    const status = await ProjectService.getSandboxStatus(id, req.user._id.toString());
+
+    console.log(`[GET /api/projects/:id/sandbox/status] Sandbox status retrieved: ${status.sandboxStatus}`);
+    res.status(200).json(status);
+  } catch (error) {
+    console.error('[GET /api/projects/:id/sandbox/status] Error getting sandbox status:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to get sandbox status',
+    });
+  }
+});
+
+// Description: Deploy project to Daytona sandbox
+// Endpoint: POST /api/projects/:id/sandbox/deploy
+// Request: {}
+// Response: { message: string }
+router.post('/:id/sandbox/deploy', requireUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    console.log(`[POST /api/projects/:id/sandbox/deploy] Deploying project to sandbox: ${id}`);
+
+    // Verify project exists and belongs to user
+    const project = await ProjectService.getProjectById(id, req.user._id.toString());
+    if (!project) {
+      console.warn(`[POST /api/projects/:id/sandbox/deploy] Project not found: ${id}`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Deploy asynchronously
+    ProjectService.deployToSandbox(id).catch((error) => {
+      console.error(`[POST /api/projects/:id/sandbox/deploy] Async deployment error:`, error);
+    });
+
+    console.log(`[POST /api/projects/:id/sandbox/deploy] Deployment started for project: ${id}`);
+    res.status(202).json({ message: 'Deployment started' });
+  } catch (error) {
+    console.error('[POST /api/projects/:id/sandbox/deploy] Error starting deployment:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to start deployment',
+    });
+  }
+});
+
 export default router;

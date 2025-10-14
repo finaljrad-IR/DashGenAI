@@ -8,7 +8,10 @@ export interface Project {
   databaseName?: string;
   templateData?: Record<string, unknown>;
   renderedOutput?: string;
-  status: 'active' | 'archived' | 'failed';
+  status: 'active' | 'archived' | 'failed' | 'generating' | 'deploying';
+  sandboxId?: string;
+  sandboxUrl?: string;
+  sandboxStatus?: 'creating' | 'running' | 'stopped' | 'failed';
   createdAt: string;
   updatedAt: string;
 }
@@ -95,6 +98,37 @@ export const deleteProject = async (id: string): Promise<void> => {
     await api.delete(`/api/projects/${id}`);
   } catch (error: any) {
     console.error('Error deleting project:', error);
+    throw new Error(error?.response?.data?.error || error.message);
+  }
+};
+
+// Description: Get sandbox status for a project
+// Endpoint: GET /api/projects/:id/sandbox/status
+// Request: {}
+// Response: { sandboxStatus: string, sandboxUrl?: string }
+export const getSandboxStatus = async (id: string): Promise<{
+  sandboxStatus: string;
+  sandboxUrl?: string;
+}> => {
+  try {
+    const response = await api.get(`/api/projects/${id}/sandbox/status`);
+    return response.data;
+  } catch (error: any) {
+    console.error('Error getting sandbox status:', error);
+    throw new Error(error?.response?.data?.error || error.message);
+  }
+};
+
+// Description: Deploy project to Daytona sandbox
+// Endpoint: POST /api/projects/:id/sandbox/deploy
+// Request: {}
+// Response: { message: string }
+export const deploySandbox = async (id: string): Promise<{ message: string }> => {
+  try {
+    const response = await api.post(`/api/projects/${id}/sandbox/deploy`);
+    return response.data;
+  } catch (error: any) {
+    console.error('Error deploying sandbox:', error);
     throw new Error(error?.response?.data?.error || error.message);
   }
 };

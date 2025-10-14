@@ -1,6 +1,12 @@
 import Project, { IProject } from '../models/Project.js';
 import mongoose from 'mongoose';
 import TemplateService from './templateService.js';
+import daytonaService from './daytonaService.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export interface CreateProjectInput {
   name: string;
@@ -53,6 +59,11 @@ class ProjectService {
 
       await project.save();
       console.log(`[ProjectService] Project created successfully with ID: ${project._id}`);
+
+      // Deploy to Daytona sandbox asynchronously
+      this.deployToSandbox(project._id.toString()).catch((error) => {
+        console.error(`[ProjectService] Failed to deploy project ${project._id} to sandbox:`, error);
+      });
 
       return project;
     } catch (error) {
@@ -207,6 +218,23 @@ class ProjectService {
         throw new Error('Invalid user ID format');
       }
 
+      // Get project to check for sandbox
+      const project = await Project.findOne({
+        _id: new mongoose.Types.ObjectId(projectId),
+        userId: new mongoose.Types.ObjectId(userId),
+      });
+
+      // Delete sandbox if exists
+      if (project?.sandboxId) {
+        try {
+          await daytonaService.deleteSandbox(project.sandboxId);
+          console.log(`[ProjectService] Sandbox deleted for project: ${projectId}`);
+        } catch (sandboxError) {
+          console.warn(`[ProjectService] Failed to delete sandbox: ${sandboxError.message}`);
+          // Continue with project deletion even if sandbox deletion fails
+        }
+      }
+
       const result = await Project.deleteOne({
         _id: new mongoose.Types.ObjectId(projectId),
         userId: new mongoose.Types.ObjectId(userId),
@@ -222,6 +250,96 @@ class ProjectService {
     } catch (error) {
       console.error(`[ProjectService] Error deleting project: ${error.message}`, error);
       throw new Error(`Failed to delete project: ${error.message}`);
+    }
+  }
+
+  /**
+   * Deploy project to Daytona sandbox
+   */
+  async deployToSandbox(projectId: string): Promise<void> {
+    try {
+      console.log(`[ProjectService] Starting sandbox deployment for project: ${projectId}`);
+
+      // Get project
+      const project = await Project.findById(projectId);
+      if (!project) {
+        throw new Error('Project not found');
+      }
+
+      // Update status to deploying
+      project.status = 'deploying';
+      project.sandboxStatus = 'creating';
+      await project.save();
+
+      // Get rendered template path
+      const projectPath = path.join(__dirname, '..', 'temp', project.renderedOutput || project.name);
+
+      // Deploy to Daytona
+      const sandboxInfo = await daytonaService.deployProject({
+        name: project.name,
+        projectPath,
+      });
+
+      // Update project with sandbox info
+      project.sandboxId = sandboxInfo.sandboxId;
+      project.sandboxUrl = sandboxInfo.sandboxUrl;
+      project.sandboxStatus = sandboxInfo.status;
+      project.status = 'active';
+      await project.save();
+
+      console.log(`[ProjectService] Project deployed successfully to sandbox: ${sandboxInfo.sandboxUrl}`);
+    } catch (error) {
+      console.error(`[ProjectService] Error deploying to sandbox: ${error.message}`, error);
+
+      // Update project status to failed
+      try {
+        await Project.findByIdAndUpdate(projectId, {
+          status: 'failed',
+          sandboxStatus: 'failed',
+        });
+      } catch (updateError) {
+        console.error(`[ProjectService] Failed to update project status:`, updateError);
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Get sandbox status for a project
+   */
+  async getSandboxStatus(projectId: string, userId: string): Promise<{
+    sandboxStatus: string;
+    sandboxUrl?: string;
+  }> {
+    try {
+      console.log(`[ProjectService] Getting sandbox status for project: ${projectId}`);
+
+      const project = await this.getProjectById(projectId, userId);
+      if (!project) {
+        throw new Error('Project not found');
+      }
+
+      if (!project.sandboxId) {
+        return { sandboxStatus: 'not_created' };
+      }
+
+      // Get live status from Daytona
+      const status = await daytonaService.getSandboxStatus(project.sandboxId);
+
+      // Update project if status changed
+      if (status !== project.sandboxStatus) {
+        project.sandboxStatus = status;
+        await project.save();
+      }
+
+      return {
+        sandboxStatus: status,
+        sandboxUrl: project.sandboxUrl,
+      };
+    } catch (error) {
+      console.error(`[ProjectService] Error getting sandbox status: ${error.message}`, error);
+      throw new Error(`Failed to get sandbox status: ${error.message}`);
     }
   }
 

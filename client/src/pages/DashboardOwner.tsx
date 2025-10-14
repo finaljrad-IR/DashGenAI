@@ -5,15 +5,15 @@ import { ChatInterface } from "@/components/Dashboard/ChatInterface";
 import { DashboardViewer } from "@/components/Dashboard/DashboardViewer";
 import { InviteModal } from "@/components/Dashboard/InviteModal";
 import { DashboardHeader } from "@/components/Dashboard/DashboardHeader";
-import { getDashboard } from "@/api/dashboards";
+import { getProjectById, getSandboxStatus } from "@/api/projects";
 import { useToast } from "@/hooks/useToast";
+import type { Project } from "@/api/projects";
 
 export function DashboardOwner() {
   const { id } = useParams<{ id: string }>();
-  const [dashboard, setDashboard] = useState<{
-    name: string
-    previewUrl: string
-  } | null>(null);
+  const [project, setProject] = useState<Project | null>(null);
+  const [sandboxUrl, setSandboxUrl] = useState<string>('');
+  const [sandboxStatus, setSandboxStatus] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -22,6 +22,11 @@ export function DashboardOwner() {
   useEffect(() => {
     if (id) {
       loadDashboard();
+      // Poll sandbox status every 5 seconds
+      const interval = setInterval(() => {
+        checkSandboxStatus();
+      }, 5000);
+      return () => clearInterval(interval);
     }
   }, [id]);
 
@@ -30,8 +35,10 @@ export function DashboardOwner() {
 
     setIsLoading(true)
     try {
-      const response = await getDashboard(id)
-      setDashboard(response)
+      const projectData = await getProjectById(id);
+      setProject(projectData);
+      setSandboxUrl(projectData.sandboxUrl || '');
+      setSandboxStatus(projectData.sandboxStatus || projectData.status || '');
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboard'
       toast({
@@ -43,6 +50,20 @@ export function DashboardOwner() {
       setIsLoading(false)
     }
   }, [id, toast]);
+
+  const checkSandboxStatus = async () => {
+    if (!id) return;
+
+    try {
+      const status = await getSandboxStatus(id);
+      setSandboxStatus(status.sandboxStatus);
+      if (status.sandboxUrl && status.sandboxUrl !== sandboxUrl) {
+        setSandboxUrl(status.sandboxUrl);
+      }
+    } catch (error) {
+      console.error('Error checking sandbox status:', error);
+    }
+  };
 
   const handleDashboardUpdate = () => {
     console.log('Dashboard updated, triggering refresh');
@@ -60,7 +81,7 @@ export function DashboardOwner() {
     );
   }
 
-  if (!dashboard) {
+  if (!project) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
@@ -73,31 +94,51 @@ export function DashboardOwner() {
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-background to-secondary/20">
       <DashboardHeader
-        dashboardId={dashboard._id}
-        initialName={dashboard.name}
+        dashboardId={project._id}
+        initialName={project.name}
         onInviteClick={() => setIsInviteModalOpen(true)}
       />
 
       <div className="flex flex-1 overflow-hidden">
         <div className="w-[400px] border-r flex-shrink-0">
           <ChatInterface
-            dashboardId={dashboard._id}
+            dashboardId={project._id}
             onDashboardUpdate={handleDashboardUpdate}
           />
         </div>
 
         <div className="flex-1">
-          <DashboardViewer
-            previewUrl={dashboard.previewUrl}
-            refreshTrigger={refreshTrigger}
-          />
+          {sandboxUrl && sandboxStatus === 'running' ? (
+            <DashboardViewer
+              previewUrl={sandboxUrl}
+              refreshTrigger={refreshTrigger}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
+                <p className="text-lg font-medium">
+                  {sandboxStatus === 'creating' || sandboxStatus === 'deploying'
+                    ? 'Setting up your dashboard...'
+                    : sandboxStatus === 'failed'
+                    ? 'Failed to deploy dashboard'
+                    : 'Preparing dashboard...'}
+                </p>
+                {sandboxStatus === 'failed' && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Please try again or contact support
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       <InviteModal
         isOpen={isInviteModalOpen}
         onClose={() => setIsInviteModalOpen(false)}
-        dashboardId={dashboard._id}
+        dashboardId={project._id}
       />
     </div>
   );
