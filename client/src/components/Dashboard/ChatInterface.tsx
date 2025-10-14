@@ -36,6 +36,7 @@ export function ChatInterface({ dashboardId, onDashboardUpdate }: ChatInterfaceP
   }, [messages]);
 
   const loadChatHistory = useCallback(async () => {
+    setIsLoading(true);
     try {
       const response = await getChatHistory(dashboardId)
       if (response.messages) {
@@ -48,8 +49,10 @@ export function ChatInterface({ dashboardId, onDashboardUpdate }: ChatInterfaceP
         description: errorMessage,
         variant: "destructive",
       })
+    } finally {
+      setIsLoading(false);
     }
-  }, [dashboardId])
+  }, [dashboardId, toast])
 
   const scrollToBottom = () => {
     if (scrollRef.current) {

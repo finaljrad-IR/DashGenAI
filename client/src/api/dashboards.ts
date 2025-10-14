@@ -29,7 +29,13 @@ export const generateDashboard = (data: { email: string; mongoUri: string }) => 
 // Response: { _id: string, name: string, previewUrl: string, ownerId: string, createdAt: string }
 export const getDashboard = (id: string) => {
   // Mocking the response
-  return new Promise((resolve) => {
+  return new Promise<{
+    _id: string;
+    name: string;
+    previewUrl: string;
+    ownerId: string;
+    createdAt: string;
+  }>((resolve) => {
     setTimeout(() => {
       resolve({
         _id: id,
@@ -151,7 +157,14 @@ export const sendChatMessage = (id: string, message: string) => {
 // Response: { messages: Array<{ _id: string, role: 'user' | 'system', content: string, timestamp: string }> }
 export const getChatHistory = (id: string) => {
   // Mocking the response
-  return new Promise((resolve) => {
+  return new Promise<{
+    messages: Array<{
+      _id: string;
+      role: 'user' | 'system';
+      content: string;
+      timestamp: string;
+    }>;
+  }>((resolve) => {
     setTimeout(() => {
       resolve({
         messages: [
