@@ -1,9 +1,10 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import { Request, Response } from 'express';
-import basicRoutes from './routes/index';
-import authRoutes from './routes/authRoutes';
-import { connectDB } from './config/database';
+import basicRoutes from './routes/index.js';
+import authRoutes from './routes/authRoutes.js';
+import projectRoutes from './routes/projectRoutes.js';
+import { connectDB } from './config/database.js';
 import cors from 'cors';
 
 // Load environment variables
@@ -38,6 +39,8 @@ app.on("error", (error: Error) => {
 app.use(basicRoutes);
 // Authentication Routes
 app.use('/api/auth', authRoutes);
+// Project Routes
+app.use('/api/projects', projectRoutes);
 
 // If no routes handled the request, it's a 404
 app.use((req: Request, res: Response) => {

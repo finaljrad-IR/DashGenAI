@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ projectName | default("Dashboard") }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .info {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #007bff;
+        }
+        .data-section {
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>{{ projectName | default("Project Dashboard") }}</h1>
+
+        <div class="info">
+            <p><strong>Database:</strong> {{ databaseName | default("N/A") }}</p>
+            <p><strong>Created:</strong> {{ createdDate | default("N/A") }}</p>
+        </div>
+
+        <div class="data-section">
+            <h2>Template Variables</h2>
+            {% if customData %}
+                <pre>{{ customData | dump | safe }}</pre>
+            {% else %}
+                <p>No custom data provided</p>
+            {% endif %}
+        </div>
+
+        <!--
+            PLACEHOLDER FOR YOUR CUSTOM TEMPLATE
+
+            You can paste your entire dashboard template here.
+            Available variables:
+            - projectName: Name of the project
+            - databaseName: Name of the MongoDB database
+            - createdDate: Creation date
+            - customData: Any custom data passed in templateData
+
+            This is just a sample template structure.
+        -->
+    </div>
+</body>
+</html>
