@@ -102,14 +102,27 @@ class DaytonaService {
       // Store sandbox reference for later use
       activeSandboxes.set(sandbox.id, sandbox);
 
-      // Get the sandbox URL (port 5173 for Vite)
-      const sandboxUrl = `https://${sandbox.id}.daytona.app:5173`;
+      // Get preview URL using getPreviewUrl (will be updated after app starts on port 5173)
+      console.log('Getting initial preview URL...');
+      try {
+        const previewInfo = await sandbox.getPreviewUrl(5173);
+        console.log(`Preview URL: ${previewInfo.url}`);
+        console.log(`Preview token: ${previewInfo.token ? '[PRESENT]' : '[NOT PRESENT]'}`);
 
-      return {
-        sandboxId: sandbox.id,
-        sandboxUrl,
-        status: 'creating',
-      };
+        return {
+          sandboxId: sandbox.id,
+          sandboxUrl: previewInfo.url,
+          status: 'creating',
+        };
+      } catch (previewError) {
+        console.warn('Could not get preview URL immediately, will retry after deployment:', previewError);
+        // Return a placeholder URL, will be updated in deployProject
+        return {
+          sandboxId: sandbox.id,
+          sandboxUrl: `https://${sandbox.id}.daytona.app:5173`,
+          status: 'creating',
+        };
+      }
     } catch (error) {
       console.error('Error creating Daytona sandbox:', error);
       console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
@@ -373,6 +386,27 @@ class DaytonaService {
       console.log('Step 4/4: Starting application...');
       await this.startApplication(sandboxInfo.sandboxId);
       console.log('Application started successfully');
+
+      // Step 5: Get the correct preview URL with authentication
+      console.log('Step 5/5: Getting preview URL...');
+      const sandbox = activeSandboxes.get(sandboxInfo.sandboxId);
+      if (sandbox) {
+        try {
+          // Wait a moment for the app to start listening on port 5173
+          console.log('Waiting for application to start on port 5173...');
+          await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+
+          const previewInfo = await sandbox.getPreviewUrl(5173);
+          console.log(`Preview URL obtained: ${previewInfo.url}`);
+          console.log(`Preview token: ${previewInfo.token ? '[PRESENT]' : '[NOT PRESENT]'}`);
+
+          sandboxInfo.sandboxUrl = previewInfo.url;
+        } catch (previewError) {
+          console.error('Error getting preview URL:', previewError);
+          console.log('Using fallback URL format');
+          // Keep the existing URL if preview URL fetch fails
+        }
+      }
 
       // Update status
       sandboxInfo.status = 'running';
