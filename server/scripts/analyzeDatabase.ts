@@ -66,6 +66,10 @@ async function main() {
       console.log(`${index + 1}. ${col.name}`);
       console.log(`   Documents: ${col.documentCount}`);
       console.log(`   Indexes: ${col.indexes.length}`);
+      console.log(`   Available Keys: ${col.availableKeys.length}`);
+      if (col.availableKeys.length > 0) {
+        console.log(`   Keys: ${col.availableKeys.slice(0, 10).join(', ')}${col.availableKeys.length > 10 ? '...' : ''}`);
+      }
       if (col.description) {
         console.log(`   Description: ${col.description}`);
       }

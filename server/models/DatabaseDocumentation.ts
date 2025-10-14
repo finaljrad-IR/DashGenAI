@@ -8,6 +8,7 @@ export interface IDatabaseDocumentation extends Document {
       name: string;
       documentCount: number;
       sampleSchema: object;
+      availableKeys: string[];
       indexes: Array<{
         name: string;
         keys: object;
@@ -50,6 +51,10 @@ const DatabaseDocumentationSchema: Schema = new Schema(
           sampleSchema: {
             type: Schema.Types.Mixed,
             default: {},
+          },
+          availableKeys: {
+            type: [String],
+            default: [],
           },
           indexes: [
             {

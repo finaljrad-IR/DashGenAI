@@ -6,6 +6,7 @@ interface CollectionInfo {
   name: string;
   documentCount: number;
   sampleSchema: object;
+  availableKeys: string[];
   indexes: Array<{
     name: string;
     keys: object;
@@ -69,6 +70,9 @@ export async function analyzeDatabase(
       const sampleDoc = await collection.findOne();
       const sampleSchema = sampleDoc ? inferSchema(sampleDoc) : {};
 
+      // Extract all available keys from multiple documents (sample up to 100 docs)
+      const availableKeys = await extractAllKeys(collection, Math.min(documentCount, 100));
+
       // Get indexes
       const indexesRaw = await collection.indexes();
       const indexes = indexesRaw.map((idx: { name: string; key: object; unique?: boolean }) => ({
@@ -81,6 +85,7 @@ export async function analyzeDatabase(
         name: collectionName,
         documentCount,
         sampleSchema,
+        availableKeys,
         indexes,
       });
 
@@ -131,6 +136,71 @@ export async function analyzeDatabase(
     if (connection) {
       await connection.close();
       console.log('[CodexService] Database connection closed');
+    }
+  }
+}
+
+/**
+ * Extract all unique keys from collection documents
+ * @param collection - MongoDB collection
+ * @param sampleSize - Number of documents to sample
+ * @returns Array of unique key paths (including nested keys with dot notation)
+ */
+async function extractAllKeys(collection: { find: (query: object) => { limit: (num: number) => { toArray: () => Promise<unknown[]> } } }, sampleSize: number): Promise<string[]> {
+  const keysSet = new Set<string>();
+
+  try {
+    // Sample documents from the collection
+    const documents = await collection.find({}).limit(sampleSize).toArray();
+
+    // Extract keys from each document
+    documents.forEach((doc: Record<string, unknown>) => {
+      extractKeysRecursive(doc, '', keysSet);
+    });
+
+    // Convert Set to sorted array
+    const keysArray = Array.from(keysSet).sort();
+    console.log(`[CodexService] Extracted ${keysArray.length} unique keys from ${documents.length} documents`);
+
+    return keysArray;
+  } catch (error) {
+    console.error('[CodexService] Error extracting keys:', error);
+    return [];
+  }
+}
+
+/**
+ * Recursively extract all keys from a document (including nested keys)
+ * @param obj - Object to extract keys from
+ * @param prefix - Current key prefix for nested objects
+ * @param keysSet - Set to store unique keys
+ */
+function extractKeysRecursive(obj: Record<string, unknown>, prefix: string, keysSet: Set<string>): void {
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const fullKey = prefix ? `${prefix}.${key}` : key;
+      keysSet.add(fullKey);
+
+      const value = obj[key];
+
+      // Handle nested objects (but not arrays, dates, or ObjectIds)
+      if (
+        value !== null &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        !(value instanceof Date) &&
+        !(value instanceof mongoose.Types.ObjectId)
+      ) {
+        extractKeysRecursive(value as Record<string, unknown>, fullKey, keysSet);
+      }
+
+      // Handle arrays of objects
+      if (Array.isArray(value) && value.length > 0) {
+        const firstElement = value[0];
+        if (firstElement !== null && typeof firstElement === 'object' && !Array.isArray(firstElement)) {
+          extractKeysRecursive(firstElement as Record<string, unknown>, fullKey, keysSet);
+        }
+      }
     }
   }
 }
