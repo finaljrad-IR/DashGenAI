@@ -32,15 +32,16 @@ export interface UpdateProjectInput {
 
 // Description: Create a new project
 // Endpoint: POST /api/projects
-// Request: { name: string, mongoConnectionString: string, databaseName?: string, templateData?: Record<string, any> }
+// Request: { name: string, mongoConnectionString: string, databaseName?: string, templateData?: Record<string, unknown> }
 // Response: { project: Project }
 export const createProject = async (data: CreateProjectInput): Promise<Project> => {
   try {
     const response = await api.post('/api/projects', data);
     return response.data.project;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating project:', error);
-    throw new Error(error?.response?.data?.error || error.message);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to create project');
   }
 };
 
@@ -52,9 +53,10 @@ export const getProjects = async (): Promise<Project[]> => {
   try {
     const response = await api.get('/api/projects');
     return response.data.projects;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching projects:', error);
-    throw new Error(error?.response?.data?.error || error.message);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch projects');
   }
 };
 
@@ -66,15 +68,16 @@ export const getProjectById = async (id: string): Promise<Project> => {
   try {
     const response = await api.get(`/api/projects/${id}`);
     return response.data.project;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching project:', error);
-    throw new Error(error?.response?.data?.error || error.message);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch project');
   }
 };
 
 // Description: Update a project
 // Endpoint: PUT /api/projects/:id
-// Request: { name?: string, mongoConnectionString?: string, databaseName?: string, templateData?: Record<string, any> }
+// Request: { name?: string, mongoConnectionString?: string, databaseName?: string, templateData?: Record<string, unknown> }
 // Response: { project: Project }
 export const updateProject = async (
   id: string,
@@ -83,9 +86,10 @@ export const updateProject = async (
   try {
     const response = await api.put(`/api/projects/${id}`, data);
     return response.data.project;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating project:', error);
-    throw new Error(error?.response?.data?.error || error.message);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to update project');
   }
 };
 
@@ -96,9 +100,10 @@ export const updateProject = async (
 export const deleteProject = async (id: string): Promise<void> => {
   try {
     await api.delete(`/api/projects/${id}`);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting project:', error);
-    throw new Error(error?.response?.data?.error || error.message);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to delete project');
   }
 };
 
@@ -113,9 +118,10 @@ export const getSandboxStatus = async (id: string): Promise<{
   try {
     const response = await api.get(`/api/projects/${id}/sandbox/status`);
     return response.data;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error getting sandbox status:', error);
-    throw new Error(error?.response?.data?.error || error.message);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to get sandbox status');
   }
 };
 
@@ -127,8 +133,9 @@ export const deploySandbox = async (id: string): Promise<{ message: string }> =>
   try {
     const response = await api.post(`/api/projects/${id}/sandbox/deploy`);
     return response.data;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deploying sandbox:', error);
-    throw new Error(error?.response?.data?.error || error.message);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to deploy sandbox');
   }
 };

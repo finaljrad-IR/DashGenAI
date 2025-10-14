@@ -1,26 +1,26 @@
 import api from './api';
 
 // Description: Submit MongoDB connection to generate dashboard
-// Endpoint: POST /api/dashboards/generate
-// Request: { email: string, mongoUri: string }
-// Response: { success: boolean, message: string, dashboardId: string }
-export const generateDashboard = (data: { email: string; mongoUri: string }) => {
-  // Mocking the response
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        success: true,
-        message: 'Dashboard generation started. You will receive an email when it\'s ready.',
-        dashboardId: 'dash_' + Math.random().toString(36).substr(2, 9)
-      });
-    }, 1000);
-  });
-  // Uncomment the below lines to make an actual API call
-  // try {
-  //   return await api.post('/api/dashboards/generate', data);
-  // } catch (error) {
-  //   throw new Error(error?.response?.data?.message || error.message);
-  // }
+// Endpoint: POST /api/projects
+// Request: { name: string, mongoConnectionString: string }
+// Response: { project: IProject }
+export const generateDashboard = async (data: { email: string; mongoUri: string }) => {
+  try {
+    console.log('[generateDashboard] Creating project with data:', data);
+    const response = await api.post('/api/projects', {
+      name: `Dashboard for ${data.email}`,
+      mongoConnectionString: data.mongoUri,
+    });
+    console.log('[generateDashboard] Project created successfully:', response.data);
+    return {
+      success: true,
+      message: 'Dashboard generation started. Your dashboard is being created and deployed.',
+      dashboardId: response.data.project._id
+    };
+  } catch (error) {
+    console.error('[generateDashboard] Error creating project:', error);
+    throw new Error(error?.response?.data?.error || error.message);
+  }
 };
 
 // Description: Get dashboard by ID

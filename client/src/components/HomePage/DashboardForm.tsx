@@ -25,13 +25,18 @@ export function DashboardForm() {
   const onSubmit = useCallback(async (data: FormData) => {
     setIsSubmitting(true)
     try {
-      await generateDashboard(data.email, data.mongoUri)
+      console.log('[DashboardForm] Submitting form with data:', data);
+      const result = await generateDashboard({ email: data.email, mongoUri: data.mongoUri })
+      console.log('[DashboardForm] Dashboard generation result:', result);
+      setSubmittedEmail(data.email)
+      setIsSuccess(true)
       toast({
         title: "Success! 🎉",
-        description: `We're building your dashboard! You'll receive an email at ${data.email} when it's ready. This usually takes 5-10 minutes.`,
+        description: result.message || `We're building your dashboard! You'll receive an email at ${data.email} when it's ready. This usually takes 5-10 minutes.`,
       })
       reset()
     } catch (error: unknown) {
+      console.error('[DashboardForm] Error generating dashboard:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to generate dashboard'
       toast({
         title: "Error",
@@ -41,7 +46,7 @@ export function DashboardForm() {
     } finally {
       setIsSubmitting(false)
     }
-  }, [reset])
+  }, [reset, toast])
 
   return (
     <Card className="max-w-2xl mx-auto backdrop-blur-sm bg-card/95 shadow-2xl border-2 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
