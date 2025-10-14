@@ -1,14 +1,17 @@
-import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { Loader2, Eye } from 'lucide-react';
-import { DashboardViewer } from '@/components/Dashboard/DashboardViewer';
-import { getDashboard } from '@/api/dashboards';
-import { useToast } from '@/hooks/useToast';
-import { Card } from '@/components/ui/card';
+import { useState, useEffect, useCallback } from "react";
+import { useParams } from "react-router-dom";
+import { Loader2, Eye } from "lucide-react";
+import { DashboardViewer } from "@/components/Dashboard/DashboardViewer";
+import { getDashboard } from "@/api/dashboards";
+import { useToast } from "@/hooks/useToast";
+import { Card } from "@/components/ui/card";
 
 export function DashboardShared() {
   const { id } = useParams<{ id: string }>();
-  const [dashboard, setDashboard] = useState<any>(null);
+  const [dashboard, setDashboard] = useState<{
+    name: string
+    previewUrl: string
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
@@ -18,23 +21,21 @@ export function DashboardShared() {
     }
   }, [id]);
 
-  const loadDashboard = async () => {
-    console.log('Loading shared dashboard:', id);
+  const loadDashboard = useCallback(async () => {
+    if (!id) return
+
     try {
-      const response = await getDashboard(id!) as any;
-      console.log('Shared dashboard loaded:', response.dashboard);
-      setDashboard(response.dashboard);
-    } catch (error: any) {
-      console.error('Failed to load shared dashboard:', error);
+      const response = await getDashboard(id)
+      setDashboard(response)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboard'
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to load dashboard',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     }
-  };
+  }, [id]);
 
   if (isLoading) {
     return (

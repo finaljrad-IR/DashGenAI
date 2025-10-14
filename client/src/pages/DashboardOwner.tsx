@@ -1,16 +1,19 @@
-import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
-import { ChatInterface } from '@/components/Dashboard/ChatInterface';
-import { DashboardViewer } from '@/components/Dashboard/DashboardViewer';
-import { InviteModal } from '@/components/Dashboard/InviteModal';
-import { DashboardHeader } from '@/components/Dashboard/DashboardHeader';
-import { getDashboard } from '@/api/dashboards';
-import { useToast } from '@/hooks/useToast';
+import { useState, useEffect, useCallback } from "react";
+import { useParams } from "react-router-dom";
+import { Loader2 } from "lucide-react";
+import { ChatInterface } from "@/components/Dashboard/ChatInterface";
+import { DashboardViewer } from "@/components/Dashboard/DashboardViewer";
+import { InviteModal } from "@/components/Dashboard/InviteModal";
+import { DashboardHeader } from "@/components/Dashboard/DashboardHeader";
+import { getDashboard } from "@/api/dashboards";
+import { useToast } from "@/hooks/useToast";
 
 export function DashboardOwner() {
   const { id } = useParams<{ id: string }>();
-  const [dashboard, setDashboard] = useState<any>(null);
+  const [dashboard, setDashboard] = useState<{
+    name: string
+    previewUrl: string
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -22,23 +25,21 @@ export function DashboardOwner() {
     }
   }, [id]);
 
-  const loadDashboard = async () => {
-    console.log('Loading dashboard:', id);
+  const loadDashboard = useCallback(async () => {
+    if (!id) return
+
     try {
-      const response = await getDashboard(id!) as any;
-      console.log('Dashboard loaded:', response.dashboard);
-      setDashboard(response.dashboard);
-    } catch (error: any) {
-      console.error('Failed to load dashboard:', error);
+      const response = await getDashboard(id)
+      setDashboard(response)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboard'
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to load dashboard',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     }
-  };
+  }, [id]);
 
   const handleDashboardUpdate = () => {
     console.log('Dashboard updated, triggering refresh');

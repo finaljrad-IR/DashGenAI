@@ -22,22 +22,16 @@ export function Login() {
   const { toast } = useToast()
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>()
 
-  const onSubmit = async (data: LoginFormData) => {
-    console.log('Login attempt for:', data.email)
+  const onSubmit = async (data: FormData) => {
     setIsLoading(true)
     try {
       await login(data.email, data.password)
-      console.log('Login successful')
-      toast({
-        title: "Success",
-        description: "You have been logged in successfully",
-      })
       navigate("/my-dashboards")
-    } catch (error: any) {
-      console.error('Login failed:', error)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to login'
       toast({
         title: "Error",
-        description: error.message || "Invalid email or password",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {

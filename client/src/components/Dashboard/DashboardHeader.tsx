@@ -10,9 +10,10 @@ interface DashboardHeaderProps {
   dashboardId: string;
   initialName: string;
   onInviteClick: () => void;
+  onNameChange: (name: string) => void;
 }
 
-export function DashboardHeader({ dashboardId, initialName, onInviteClick }: DashboardHeaderProps) {
+export function DashboardHeader({ dashboardId, initialName, onInviteClick, onNameChange }: DashboardHeaderProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(initialName);
   const [editedName, setEditedName] = useState(initialName);
@@ -20,32 +21,23 @@ export function DashboardHeader({ dashboardId, initialName, onInviteClick }: Das
   const navigate = useNavigate();
 
   const handleSave = async () => {
-    if (!editedName.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Dashboard name cannot be empty',
-        variant: 'destructive',
-      });
-      return;
-    }
+    if (!editedName.trim()) return
 
-    console.log('Updating dashboard name:', editedName);
     try {
-      await updateDashboard(dashboardId, { name: editedName });
-      console.log('Dashboard name updated successfully');
-      setName(editedName);
-      setIsEditing(false);
+      await updateDashboard(dashboardId, { name: editedName })
+      onNameChange(editedName)
+      setIsEditing(false)
       toast({
-        title: 'Success',
-        description: 'Dashboard name updated',
-      });
-    } catch (error: any) {
-      console.error('Failed to update dashboard name:', error);
+        title: "Success",
+        description: "Dashboard name updated successfully",
+      })
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update dashboard name'
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to update dashboard name',
-        variant: 'destructive',
-      });
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     }
   };
 

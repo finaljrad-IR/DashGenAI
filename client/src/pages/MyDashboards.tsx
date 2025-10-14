@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
 import { Loader2, LayoutDashboard, Calendar, Clock, ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,7 +7,12 @@ import { getUserDashboards } from '@/api/dashboards';
 import { useToast } from '@/hooks/useToast';
 
 export function MyDashboards() {
-  const [dashboards, setDashboards] = useState<any[]>([]);
+  const [dashboards, setDashboards] = useState<Array<{
+    _id: string
+    name: string
+    createdAt: string
+    previewUrl: string
+  }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -16,23 +21,22 @@ export function MyDashboards() {
     loadDashboards();
   }, []);
 
-  const loadDashboards = async () => {
-    console.log('Loading user dashboards');
+  const loadDashboards = useCallback(async () => {
+    setIsLoading(true)
     try {
-      const response = await getUserDashboards() as any;
-      console.log('Dashboards loaded:', response.dashboards.length);
-      setDashboards(response.dashboards);
-    } catch (error: any) {
-      console.error('Failed to load dashboards:', error);
+      const response = await getUserDashboards()
+      setDashboards(response.dashboards || [])
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboards'
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to load dashboards',
-        variant: 'destructive',
-      });
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }, [])
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);

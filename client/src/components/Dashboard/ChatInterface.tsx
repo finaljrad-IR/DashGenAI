@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Send, Loader2, Bot, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,23 +35,21 @@ export function ChatInterface({ dashboardId, onDashboardUpdate }: ChatInterfaceP
     scrollToBottom();
   }, [messages]);
 
-  const loadChatHistory = async () => {
-    console.log('Loading chat history for dashboard:', dashboardId);
+  const loadChatHistory = useCallback(async () => {
     try {
-      const response = await getChatHistory(dashboardId) as any;
-      console.log('Chat history loaded:', response.messages.length, 'messages');
-      setMessages(response.messages);
-    } catch (error: any) {
-      console.error('Failed to load chat history:', error);
+      const response = await getChatHistory(dashboardId)
+      if (response.messages) {
+        setMessages(response.messages)
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load chat history'
       toast({
-        title: 'Error',
-        description: 'Failed to load chat history',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     }
-  };
+  }, [dashboardId])
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
@@ -59,51 +57,48 @@ export function ChatInterface({ dashboardId, onDashboardUpdate }: ChatInterfaceP
     }
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!inputMessage.trim() || isSending) return;
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || isLoading) return
 
-    const userMessage: Message = {
-      _id: 'temp_' + Date.now(),
-      role: 'user',
+    const userMessage = {
+      id: Date.now().toString(),
+      role: 'user' as const,
       content: inputMessage,
-      timestamp: new Date().toISOString()
-    };
+      timestamp: new Date().toISOString(),
+    }
 
-    console.log('Sending chat message:', inputMessage);
-    setMessages(prev => [...prev, userMessage]);
-    setInputMessage('');
-    setIsSending(true);
+    setMessages(prev => [...prev, userMessage])
+    setInputMessage('')
+    setIsLoading(true)
 
     try {
-      const response = await sendChatMessage(dashboardId, inputMessage) as any;
-      console.log('Chat response received:', response);
+      const response = await sendChatMessage(dashboardId, inputMessage)
       
-      const systemMessage: Message = {
-        _id: 'msg_' + Date.now(),
-        role: 'system',
-        content: response.reply,
-        timestamp: new Date().toISOString()
-      };
-
-      setMessages(prev => [...prev, systemMessage]);
-
-      if (response.status === 'completed' && onDashboardUpdate) {
-        console.log('Dashboard update completed, triggering refresh');
-        setTimeout(() => {
-          onDashboardUpdate();
-        }, 1000);
+      if (response.message) {
+        const assistantMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant' as const,
+          content: response.message,
+          timestamp: new Date().toISOString(),
+        }
+        setMessages(prev => [...prev, assistantMessage])
       }
-    } catch (error: any) {
-      console.error('Failed to send message:', error);
+
+      if (response.dashboardUpdated) {
+        toast({
+          title: "Dashboard Updated",
+          description: "Your dashboard has been updated successfully.",
+        })
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send message'
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to send message',
-        variant: 'destructive',
-      });
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
-      setIsSending(false);
+      setIsLoading(false)
     }
   };
 

@@ -1,14 +1,14 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { Lock, Eye, EyeOff, Loader2, CheckCircle2, Mail } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import { getInvitationDetails, acceptInvitation } from '@/api/invitations';
-import { useToast } from '@/hooks/useToast';
+import { useState, useEffect, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { Lock, Eye, EyeOff, Loader2, CheckCircle2, Mail } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { getInvitationDetails, acceptInvitation } from "@/api/invitations";
+import { useToast } from "@/hooks/useToast";
 
 interface FormData {
   password: string;
@@ -18,7 +18,11 @@ interface FormData {
 export function AcceptInvitation() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
-  const [invitation, setInvitation] = useState<any>(null);
+  const [invitation, setInvitation] = useState<{
+    email: string
+    dashboardName: string
+    inviterEmail: string
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -43,23 +47,21 @@ export function AcceptInvitation() {
     }
   }, [password]);
 
-  const loadInvitationDetails = async () => {
-    console.log('Loading invitation details for token:', token);
+  const loadInvitationDetails = useCallback(async () => {
+    if (!token) return
+    
     try {
-      const response = await getInvitationDetails(token!) as any;
-      console.log('Invitation details loaded:', response.invitation);
-      setInvitation(response.invitation);
-    } catch (error: any) {
-      console.error('Failed to load invitation:', error);
+      const response = await getInvitationDetails(token)
+      setInvitation(response)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load invitation details'
       toast({
-        title: 'Error',
-        description: error.message || 'Invalid or expired invitation',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     }
-  };
+  }, [token])
 
   const calculatePasswordStrength = (pwd: string) => {
     let strength = 0;
@@ -83,39 +85,36 @@ export function AcceptInvitation() {
     return 'Strong';
   };
 
-  const onSubmit = async (data: FormData) => {
-    console.log('Accepting invitation with token:', token);
-    setIsSubmitting(true);
+  const onSubmit = useCallback(async (data: FormData) => {
+    if (!token) return
 
+    setIsLoading(true)
     try {
-      const response = await acceptInvitation({
-        token: token!,
-        password: data.password
-      }) as any;
+      const response = await acceptInvitation(token, data.password)
+      
+      if (response.accessToken) {
+        localStorage.setItem('accessToken', response.accessToken)
+      }
 
-      console.log('Invitation accepted successfully:', response);
-      
-      localStorage.setItem('accessToken', response.accessToken);
-      
       toast({
-        title: 'Welcome!',
-        description: 'Your account has been created successfully',
-      });
+        title: "Welcome! 🎉",
+        description: "Your account has been created successfully.",
+      })
 
       setTimeout(() => {
-        navigate(`/dashboard/${response.dashboardId}/shared`);
-      }, 1000);
-    } catch (error: any) {
-      console.error('Failed to accept invitation:', error);
+        navigate(`/dashboard/${response.dashboardId}/shared`)
+      }, 1000)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to accept invitation'
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to accept invitation',
-        variant: 'destructive',
-      });
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false)
     }
-  };
+  }, [token, navigate])
 
   if (isLoading) {
     return (

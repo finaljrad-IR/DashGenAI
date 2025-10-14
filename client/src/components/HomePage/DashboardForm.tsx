@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from "react";
 import { useForm } from 'react-hook-form';
 import { Mail, Database, Loader2, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -22,39 +22,26 @@ export function DashboardForm() {
   
   const { register, handleSubmit, formState: { errors }, reset } = useForm<FormData>();
 
-  const onSubmit = async (data: FormData) => {
-    console.log('Submitting dashboard generation request:', { email: data.email });
-    setIsSubmitting(true);
-    
+  const onSubmit = useCallback(async (data: FormData) => {
+    setIsSubmitting(true)
     try {
-      const response = await generateDashboard(data) as any;
-      console.log('Dashboard generation response:', response);
-      
-      setSubmittedEmail(data.email);
-      setIsSuccess(true);
-      reset();
-      
+      await generateDashboard(data.email, data.mongoUri)
       toast({
-        title: 'Success!',
-        description: 'Dashboard generation started. Check your email for updates.',
-      });
-      
-      // Reset success message after 10 seconds
-      setTimeout(() => {
-        setIsSuccess(false);
-        setSubmittedEmail('');
-      }, 10000);
-    } catch (error: any) {
-      console.error('Dashboard generation error:', error);
+        title: "Success! 🎉",
+        description: `We're building your dashboard! You'll receive an email at ${data.email} when it's ready. This usually takes 5-10 minutes.`,
+      })
+      reset()
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate dashboard'
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to start dashboard generation',
-        variant: 'destructive',
-      });
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
-  };
+  }, [reset])
 
   return (
     <Card className="max-w-2xl mx-auto backdrop-blur-sm bg-card/95 shadow-2xl border-2 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
