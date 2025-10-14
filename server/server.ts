@@ -4,6 +4,7 @@ import { Request, Response } from 'express';
 import basicRoutes from './routes/index.js';
 import authRoutes from './routes/authRoutes.js';
 import projectRoutes from './routes/projectRoutes.js';
+import codexRoutes from './routes/codexRoutes.js';
 import { connectDB } from './config/database.js';
 import cors from 'cors';
 
@@ -41,6 +42,8 @@ app.use(basicRoutes);
 app.use('/api/auth', authRoutes);
 // Project Routes
 app.use('/api/projects', projectRoutes);
+// Codex Routes
+app.use('/api/codex', codexRoutes);
 
 // If no routes handled the request, it's a 404
 app.use((req: Request, res: Response) => {
