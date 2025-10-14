@@ -8,7 +8,7 @@ const router = express.Router();
 // Endpoint: POST /api/codex/analyze
 // Request: { projectId: string, databaseUri: string }
 // Response: { documentation: IDatabaseDocumentation }
-router.post('/analyze', requireUser, async (req: Request, res: Response) => {
+router.post('/analyze', requireUser(), async (req: Request, res: Response) => {
   try {
     const { projectId, databaseUri } = req.body;
 
@@ -49,7 +49,7 @@ router.post('/analyze', requireUser, async (req: Request, res: Response) => {
 // Endpoint: GET /api/codex/documentation/:projectId
 // Request: {}
 // Response: { documentation: IDatabaseDocumentation | null }
-router.get('/documentation/:projectId', requireUser, async (req: Request, res: Response) => {
+router.get('/documentation/:projectId', requireUser(), async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params;
 
@@ -82,7 +82,7 @@ router.get('/documentation/:projectId', requireUser, async (req: Request, res: R
 // Endpoint: DELETE /api/codex/documentation/:documentationId
 // Request: {}
 // Response: { success: boolean }
-router.delete('/documentation/:documentationId', requireUser, async (req: Request, res: Response) => {
+router.delete('/documentation/:documentationId', requireUser(), async (req: Request, res: Response) => {
   try {
     const { documentationId } = req.params;
 

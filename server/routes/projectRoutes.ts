@@ -9,7 +9,7 @@ const router = express.Router();
 // Endpoint: POST /api/projects
 // Request: { name: string, mongoConnectionString: string, databaseName?: string, templateData?: Record<string, any> }
 // Response: { project: IProject }
-router.post('/', requireUser, async (req: Request, res: Response) => {
+router.post('/', requireUser(), async (req: Request, res: Response) => {
   try {
     console.log('[POST /api/projects] Creating new project');
 
@@ -53,7 +53,7 @@ router.post('/', requireUser, async (req: Request, res: Response) => {
 // Endpoint: GET /api/projects
 // Request: {}
 // Response: { projects: Array<IProject> }
-router.get('/', requireUser, async (req: Request, res: Response) => {
+router.get('/', requireUser(), async (req: Request, res: Response) => {
   try {
     console.log(`[GET /api/projects] Fetching projects for user: ${req.user._id}`);
 
@@ -73,7 +73,7 @@ router.get('/', requireUser, async (req: Request, res: Response) => {
 // Endpoint: GET /api/projects/:id
 // Request: {}
 // Response: { project: IProject }
-router.get('/:id', requireUser, async (req: Request, res: Response) => {
+router.get('/:id', requireUser(), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     console.log(`[GET /api/projects/:id] Fetching project: ${id}`);
@@ -102,7 +102,7 @@ router.get('/:id', requireUser, async (req: Request, res: Response) => {
 // Endpoint: PUT /api/projects/:id
 // Request: { name?: string, mongoConnectionString?: string, databaseName?: string, templateData?: Record<string, any> }
 // Response: { project: IProject }
-router.put('/:id', requireUser, async (req: Request, res: Response) => {
+router.put('/:id', requireUser(), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     console.log(`[PUT /api/projects/:id] Updating project: ${id}`);
@@ -146,7 +146,7 @@ router.put('/:id', requireUser, async (req: Request, res: Response) => {
 // Endpoint: DELETE /api/projects/:id
 // Request: {}
 // Response: { message: string }
-router.delete('/:id', requireUser, async (req: Request, res: Response) => {
+router.delete('/:id', requireUser(), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     console.log(`[DELETE /api/projects/:id] Deleting project: ${id}`);
@@ -172,7 +172,7 @@ router.delete('/:id', requireUser, async (req: Request, res: Response) => {
 // Endpoint: POST /api/projects/test-render
 // Request: { project_name: string }
 // Response: { outputPath: string, message: string }
-router.post('/test-render', requireUser, async (req: Request, res: Response) => {
+router.post('/test-render', requireUser(), async (req: Request, res: Response) => {
   try {
     console.log('[POST /api/projects/test-render] Testing template rendering');
 
@@ -209,7 +209,7 @@ router.post('/test-render', requireUser, async (req: Request, res: Response) => 
 // Endpoint: GET /api/projects/:id/sandbox/status
 // Request: {}
 // Response: { sandboxStatus: string, sandboxUrl?: string }
-router.get('/:id/sandbox/status', requireUser, async (req: Request, res: Response) => {
+router.get('/:id/sandbox/status', requireUser(), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     console.log(`[GET /api/projects/:id/sandbox/status] Getting sandbox status for project: ${id}`);
@@ -230,7 +230,7 @@ router.get('/:id/sandbox/status', requireUser, async (req: Request, res: Respons
 // Endpoint: POST /api/projects/:id/sandbox/deploy
 // Request: {}
 // Response: { message: string }
-router.post('/:id/sandbox/deploy', requireUser, async (req: Request, res: Response) => {
+router.post('/:id/sandbox/deploy', requireUser(), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     console.log(`[POST /api/projects/:id/sandbox/deploy] Deploying project to sandbox: ${id}`);
