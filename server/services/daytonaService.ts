@@ -155,6 +155,15 @@ class DaytonaService {
   private async uploadDirectory(sandbox: any, localPath: string, remotePath: string): Promise<void> {
     const entries = await fs.readdir(localPath, { withFileTypes: true });
 
+    // First, ensure the remote directory exists
+    try {
+      console.log(`Creating remote directory: ${remotePath}`);
+      await sandbox.process.executeCommand(`mkdir -p "${remotePath}"`);
+    } catch (error) {
+      console.error(`Error creating directory ${remotePath}:`, error);
+      // Continue anyway, directory might already exist
+    }
+
     for (const entry of entries) {
       const localFilePath = path.join(localPath, entry.name);
       const remoteFilePath = path.join(remotePath, entry.name);
@@ -170,9 +179,14 @@ class DaytonaService {
         await this.uploadDirectory(sandbox, localFilePath, remoteFilePath);
       } else {
         // Upload file
-        const fileContent = await fs.readFile(localFilePath);
-        await sandbox.fs.uploadFile(fileContent, remoteFilePath);
-        console.log(`Uploaded: ${remoteFilePath}`);
+        try {
+          const fileContent = await fs.readFile(localFilePath);
+          await sandbox.fs.uploadFile(fileContent, remoteFilePath);
+          console.log(`Uploaded: ${remoteFilePath}`);
+        } catch (error) {
+          console.error(`Error uploading file ${remoteFilePath}:`, error);
+          throw error;
+        }
       }
     }
   }
