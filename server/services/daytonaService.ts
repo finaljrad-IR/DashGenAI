@@ -72,6 +72,8 @@ class DaytonaService {
     const client = this.ensureClient();
 
     try {
+      console.log('Calling Daytona SDK create method...');
+
       // Create a new sandbox with TypeScript language
       const sandbox = await client.create({
         language: 'typescript',
@@ -81,6 +83,19 @@ class DaytonaService {
         },
         autoStopInterval: 60, // Auto-stop after 1 hour of inactivity
       });
+
+      console.log(`Sandbox response received:`, JSON.stringify(sandbox, null, 2));
+
+      // Validate the response
+      if (!sandbox || typeof sandbox !== 'object') {
+        console.error('Invalid sandbox response:', sandbox);
+        throw new Error('Daytona API returned an invalid response. Please check your API key and endpoint configuration.');
+      }
+
+      if (!sandbox.id) {
+        console.error('Sandbox response missing ID:', sandbox);
+        throw new Error('Daytona API did not return a sandbox ID. Response may be invalid.');
+      }
 
       console.log(`Sandbox created with ID: ${sandbox.id}`);
 
@@ -97,7 +112,15 @@ class DaytonaService {
       };
     } catch (error) {
       console.error('Error creating Daytona sandbox:', error);
-      throw new Error(`Failed to create sandbox: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+
+      // Check if the error is related to HTML response
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('DOCTYPE') || errorMessage.includes('<html') || errorMessage.includes('<body')) {
+        throw new Error('Daytona API returned HTML instead of JSON. This usually means the API endpoint is incorrect or the API key is invalid. Please verify your DAYTONA_API_KEY and DAYTONA_API_URL environment variables.');
+      }
+
+      throw new Error(`Failed to create sandbox: ${errorMessage}`);
     }
   }
 
@@ -278,19 +301,28 @@ class DaytonaService {
    */
   async deployProject(config: SandboxConfig): Promise<SandboxInfo> {
     console.log(`Starting full deployment for project: ${config.name}`);
+    let sandboxInfo: SandboxInfo | null = null;
 
     try {
       // Step 1: Create sandbox
-      const sandboxInfo = await this.createSandbox(config);
+      console.log('Step 1/4: Creating sandbox...');
+      sandboxInfo = await this.createSandbox(config);
+      console.log(`Sandbox created successfully: ${sandboxInfo.sandboxId}`);
 
       // Step 2: Upload files
+      console.log('Step 2/4: Uploading project files...');
       await this.uploadFiles(sandboxInfo.sandboxId, config.projectPath);
+      console.log('Files uploaded successfully');
 
       // Step 3: Install dependencies
+      console.log('Step 3/4: Installing dependencies...');
       await this.installDependencies(sandboxInfo.sandboxId);
+      console.log('Dependencies installed successfully');
 
       // Step 4: Start application
+      console.log('Step 4/4: Starting application...');
       await this.startApplication(sandboxInfo.sandboxId);
+      console.log('Application started successfully');
 
       // Update status
       sandboxInfo.status = 'running';
@@ -299,6 +331,24 @@ class DaytonaService {
       return sandboxInfo;
     } catch (error) {
       console.error('Error during project deployment:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : 'No stack trace',
+        sandboxId: sandboxInfo?.sandboxId || 'Not created yet',
+      });
+
+      // Clean up sandbox if it was created
+      if (sandboxInfo?.sandboxId) {
+        console.log(`Attempting to clean up sandbox ${sandboxInfo.sandboxId} after deployment failure...`);
+        try {
+          await this.deleteSandbox(sandboxInfo.sandboxId);
+          console.log('Sandbox cleaned up successfully');
+        } catch (cleanupError) {
+          console.error('Error cleaning up sandbox:', cleanupError);
+          // Don't throw here, we want to preserve the original error
+        }
+      }
+
       throw new Error(`Deployment failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
