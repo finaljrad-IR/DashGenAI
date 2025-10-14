@@ -36,16 +36,43 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 });
 
+// Description: Register a new user
+// Endpoint: POST /api/auth/register
+// Request: { email: string, password: string, name?: string }
+// Response: { user: IUser, accessToken: string, refreshToken: string }
 router.post('/register', async (req: AuthRequest, res: Response) => {
   if (req.user) {
     return res.json({ user: req.user });
   }
   try {
-    const user = await UserService.create(req.body);
-    return res.status(200).json(user);
+    const { email, password, name } = req.body;
+
+    if (!email || !password) {
+      console.warn('[POST /api/auth/register] Validation failed: Missing email or password');
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    console.log(`[POST /api/auth/register] Creating new user with email: ${email}`);
+    const user = await UserService.create({ email, password, name });
+
+    // Generate tokens for the new user
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+
+    // Save refresh token to user
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    console.log(`[POST /api/auth/register] User registered successfully: ${user._id}`);
+    return res.status(201).json({
+      user: user.toObject(),
+      accessToken,
+      refreshToken
+    });
   } catch (error) {
-    console.error(`Error while registering user: ${error}`);
-    return res.status(400).json({ error });
+    console.error('[POST /api/auth/register] Error while registering user:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to register user';
+    return res.status(400).json({ error: errorMessage });
   }
 });
 

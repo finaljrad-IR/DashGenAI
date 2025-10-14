@@ -58,11 +58,15 @@ export function Register() {
     return 'Strong'
   }
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true)
     try {
-      await register(data.name, data.email, data.password)
-      navigate("/my-dashboards")
+      await registerUser(data.email, data.password)
+      toast({
+        title: "Success",
+        description: "Account created successfully! Redirecting...",
+      })
+      navigate("/")
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to register'
       toast({

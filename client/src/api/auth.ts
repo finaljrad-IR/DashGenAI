@@ -17,13 +17,14 @@ export const login = async (email: string, password: string) => {
 // Description: Register user functionality
 // Endpoint: POST /api/auth/register
 // Request: { email: string, password: string }
-// Response: { email: string }
+// Response: { user: IUser, accessToken: string, refreshToken: string }
 export const register = async (email: string, password: string) => {
   try {
     const response = await api.post('/api/auth/register', {email, password});
     return response.data;
   } catch (error) {
-    throw new Error(error?.response?.data?.message || error.message);
+    console.error('Registration error:', error);
+    throw new Error(error?.response?.data?.error || error.message);
   }
 };
 

@@ -35,8 +35,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (email: string, password: string) => {
     try {
       const response = await apiRegister(email, password);
-      const { accessToken, refreshToken, ...userData } = response;
-      setAuthData(accessToken, refreshToken, userData);
+      const { user, accessToken, refreshToken } = response;
+      setAuthData(accessToken, refreshToken, user);
     } catch (error) {
       resetAuth();
       throw new Error(error?.message || 'Registration failed');
