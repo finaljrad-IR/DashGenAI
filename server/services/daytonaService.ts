@@ -21,6 +21,9 @@ interface SandboxInfo {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const activeSandboxes = new Map<string, any>();
 
+// Track which sandboxes have Codex authenticated
+const codexAuthenticatedSandboxes = new Set<string>();
+
 class DaytonaService {
   private client: Daytona | null = null;
   private initialized = false;
@@ -392,8 +395,9 @@ class DaytonaService {
       // Delete the sandbox using the client
       await client.delete(sandbox);
 
-      // Remove from active sandboxes
+      // Remove from active sandboxes and authentication tracking
       activeSandboxes.delete(sandboxId);
+      codexAuthenticatedSandboxes.delete(sandboxId);
 
       console.log(`Sandbox ${sandboxId} deleted successfully`);
     } catch (error) {
@@ -511,6 +515,52 @@ class DaytonaService {
   }
 
   /**
+   * Setup Codex authentication on the sandbox
+   * This must be run after Codex installation and before running any Codex commands
+   */
+  private async setupCodexAuthentication(sandboxId: string, openaiApiKey: string): Promise<void> {
+    console.log(`[DaytonaService] Setting up Codex authentication for sandbox ${sandboxId}`);
+
+    // Check if already authenticated
+    if (codexAuthenticatedSandboxes.has(sandboxId)) {
+      console.log(`[DaytonaService] Codex already authenticated for sandbox ${sandboxId}`);
+      return;
+    }
+
+    try {
+      // Run the two commands in sequence to authenticate Codex
+      console.log(`[DaytonaService] Exporting OPENAI_API_KEY and logging into Codex...`);
+
+      const authCommand = `export OPENAI_API_KEY="${openaiApiKey}" && printenv OPENAI_API_KEY | codex login --with-api-key`;
+
+      const authResult = await this.executeCommand(sandboxId, authCommand);
+
+      if (!authResult.success) {
+        throw new Error(`Codex authentication failed: ${authResult.error}`);
+      }
+
+      console.log(`[DaytonaService] Codex authentication output: ${authResult.output?.substring(0, 200)}`);
+
+      // Verify Codex is working
+      console.log(`[DaytonaService] Verifying Codex installation...`);
+      const verifyResult = await this.executeCommand(sandboxId, 'codex --version');
+
+      if (!verifyResult.success) {
+        console.warn(`[DaytonaService] Codex verification warning: ${verifyResult.error}`);
+      } else {
+        console.log(`[DaytonaService] Codex version: ${verifyResult.output}`);
+      }
+
+      // Mark sandbox as authenticated
+      codexAuthenticatedSandboxes.add(sandboxId);
+      console.log(`[DaytonaService] Codex authentication completed successfully for sandbox ${sandboxId}`);
+    } catch (error) {
+      console.error(`[DaytonaService] Error setting up Codex authentication:`, error);
+      throw new Error(`Failed to authenticate Codex: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Run Codex on the sandbox with MongoDB documentation
    */
   async runCodexOnSandbox(
@@ -533,14 +583,21 @@ class DaytonaService {
 
       if (!installResult.success) {
         console.warn(`[DaytonaService] Codex CLI installation warning: ${installResult.error}`);
+      } else {
+        console.log(`[DaytonaService] Codex CLI installation output: ${installResult.output?.substring(0, 200)}`);
       }
 
-      // Step 2: Create a process session for streaming
+      // Step 2: Setup Codex authentication (export API key and login)
+      console.log(`[DaytonaService] Setting up Codex authentication...`);
+      await this.setupCodexAuthentication(sandboxId, openaiApiKey);
+
+      // Step 3: Create a process session for streaming
       const sessionId = `codex-session-${Date.now()}`;
       console.log(`[DaytonaService] Creating process session: ${sessionId}`);
       await sandbox.process.createSession(sessionId);
 
-      // Step 3: Run Codex in JSON mode with the prompt using the session
+      // Step 4: Run Codex in JSON mode with the prompt using the session
+      // Include the API key in the environment for this specific command
       console.log(`[DaytonaService] Executing Codex with prompt in session`);
       const escapedPrompt = prompt.replace(/"/g, '\\"').replace(/\n/g, '\\n');
       const codexCommand = `cd workspace && OPENAI_API_KEY="${openaiApiKey}" codex exec --json --skip-git-repo-check "${escapedPrompt}"`;
