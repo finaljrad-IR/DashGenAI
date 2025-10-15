@@ -468,6 +468,111 @@ class DaytonaService {
       throw new Error(`Deployment failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+  /**
+   * Execute a command on the sandbox
+   */
+  async executeCommand(
+    sandboxId: string,
+    command: string
+  ): Promise<{ success: boolean; output?: string; error?: string }> {
+    console.log(`[DaytonaService] Executing command on sandbox ${sandboxId}: ${command}`);
+    const sandbox = activeSandboxes.get(sandboxId);
+
+    if (!sandbox) {
+      throw new Error(`Sandbox ${sandboxId} not found`);
+    }
+
+    try {
+      const response = await sandbox.process.executeCommand(command);
+      console.log(`[DaytonaService] Command executed successfully`);
+      return { success: true, output: response.result };
+    } catch (error) {
+      console.error(`[DaytonaService] Error executing command:`, error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  /**
+   * Run Codex on the sandbox with MongoDB documentation
+   */
+  async runCodexOnSandbox(
+    sandboxId: string,
+    openaiApiKey: string,
+    prompt: string
+  ): Promise<{ success: boolean; error?: string }> {
+    console.log(`[DaytonaService] Running Codex on sandbox ${sandboxId}`);
+    const sandbox = activeSandboxes.get(sandboxId);
+
+    if (!sandbox) {
+      throw new Error(`Sandbox ${sandboxId} not found`);
+    }
+
+    try {
+      // Step 1: Install Codex CLI if not already installed
+      console.log(`[DaytonaService] Installing Codex CLI...`);
+      const installResult = await this.executeCommand(
+        sandboxId,
+        'npm install -g @anthropic-ai/codex-cli || true'
+      );
+
+      if (!installResult.success) {
+        console.warn(`[DaytonaService] Codex CLI installation warning: ${installResult.error}`);
+      }
+
+      // Step 2: Set OpenAI API key as environment variable
+      console.log(`[DaytonaService] Setting OPENAI_API_KEY environment variable`);
+      const setEnvResult = await this.executeCommand(
+        sandboxId,
+        `export OPENAI_API_KEY="${openaiApiKey}"`
+      );
+
+      if (!setEnvResult.success) {
+        throw new Error(`Failed to set OPENAI_API_KEY: ${setEnvResult.error}`);
+      }
+
+      // Step 3: Run Codex in JSON mode with the prompt
+      console.log(`[DaytonaService] Executing Codex with prompt`);
+      const escapedPrompt = prompt.replace(/"/g, '\\"').replace(/\n/g, '\\n');
+      const codexCommand = `cd workspace && OPENAI_API_KEY="${openaiApiKey}" codex exec --json "${escapedPrompt}"`;
+
+      // Start the Codex command in the background
+      const codexResult = await this.executeCommand(
+        sandboxId,
+        `nohup sh -c '${codexCommand}' > /tmp/codex.log 2>&1 &`
+      );
+
+      if (!codexResult.success) {
+        throw new Error(`Failed to run Codex: ${codexResult.error}`);
+      }
+
+      console.log(`[DaytonaService] Codex execution initiated successfully`);
+      return { success: true };
+    } catch (error) {
+      console.error(`[DaytonaService] Error running Codex:`, error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  /**
+   * Get logs from the sandbox (for streaming Codex output)
+   */
+  async getSandboxLogs(sandboxId: string, logFile: string = '/tmp/codex.log'): Promise<string> {
+    console.log(`[DaytonaService] Getting logs from sandbox ${sandboxId}: ${logFile}`);
+    const sandbox = activeSandboxes.get(sandboxId);
+
+    if (!sandbox) {
+      throw new Error(`Sandbox ${sandboxId} not found`);
+    }
+
+    try {
+      const response = await sandbox.process.executeCommand(`tail -n 100 ${logFile} 2>/dev/null || echo ""`);
+      return response.result || '';
+    } catch (error) {
+      console.error(`[DaytonaService] Error getting logs:`, error);
+      return '';
+    }
+  }
 }
 
 // Export singleton instance

@@ -257,4 +257,98 @@ router.post('/:id/sandbox/deploy', requireUser(), async (req: Request, res: Resp
   }
 });
 
+// Description: Run Codex on project sandbox to implement dashboard
+// Endpoint: POST /api/projects/:id/run-codex
+// Request: { prompt?: string }
+// Response: { success: boolean, message: string }
+router.post('/:id/run-codex', requireUser(), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { prompt } = req.body;
+
+    console.log(`[POST /api/projects/:id/run-codex] Running Codex on project ${id}`);
+
+    // Get project
+    const project = await ProjectService.getProjectById(id, req.user._id.toString());
+    if (!project) {
+      console.warn(`[POST /api/projects/:id/run-codex] Project not found: ${id}`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Check if sandbox is deployed
+    if (!project.sandboxInfo?.workspaceId) {
+      console.warn(`[POST /api/projects/:id/run-codex] Sandbox not deployed for project: ${id}`);
+      return res.status(400).json({ error: 'Sandbox not deployed yet' });
+    }
+
+    // Run Codex (this will use ProjectService which we'll update)
+    await ProjectService.runCodexOnProject(id, req.user._id.toString(), prompt);
+
+    console.log(`[POST /api/projects/:id/run-codex] Codex execution started successfully`);
+    res.status(200).json({
+      success: true,
+      message: 'Codex execution started. Check logs for progress.',
+    });
+  } catch (error) {
+    console.error(`[POST /api/projects/:id/run-codex] Error running Codex:`, error);
+    res.status(500).json({ error: error.message || 'Failed to run Codex' });
+  }
+});
+
+// Description: Stream logs from project sandbox
+// Endpoint: GET /api/projects/:id/logs
+// Request: { follow?: boolean }
+// Response: Server-Sent Events (SSE) stream of logs
+router.get('/:id/logs', requireUser(), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    console.log(`[GET /api/projects/:id/logs] Streaming logs for project ${id}`);
+
+    // Get project
+    const project = await ProjectService.getProjectById(id, req.user._id.toString());
+    if (!project) {
+      console.warn(`[GET /api/projects/:id/logs] Project not found: ${id}`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Check if sandbox is deployed
+    if (!project.sandboxInfo?.workspaceId) {
+      console.warn(`[GET /api/projects/:id/logs] Sandbox not deployed for project: ${id}`);
+      return res.status(400).json({ error: 'Sandbox not deployed yet' });
+    }
+
+    // Set up SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+
+    console.log(`[GET /api/projects/:id/logs] SSE connection established`);
+
+    // Stream logs
+    await ProjectService.streamProjectLogs(
+      id,
+      req.user._id.toString(),
+      (logData) => {
+        // Send data as SSE
+        res.write(`data: ${JSON.stringify(logData)}\n\n`);
+      },
+      (error) => {
+        // Send error and close
+        console.error(`[GET /api/projects/:id/logs] Error in log stream:`, error);
+        res.write(`data: ${JSON.stringify({ type: 'error', data: error.message })}\n\n`);
+        res.end();
+      }
+    );
+
+    console.log(`[GET /api/projects/:id/logs] Log stream ended`);
+  } catch (error) {
+    console.error('[GET /api/projects/:id/logs] Error streaming logs:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message || 'Failed to stream logs' });
+    }
+  }
+});
+
 export default router;

@@ -352,6 +352,125 @@ class ProjectService {
     }
   }
 
+  /**
+   * Run Codex on a project's sandbox
+   */
+  async runCodexOnProject(projectId: string, userId: string, customPrompt?: string): Promise<void> {
+    try {
+      console.log(`[ProjectService] Running Codex on project: ${projectId}`);
+
+      // Get project
+      const project = await this.getProjectById(projectId, userId);
+      if (!project) {
+        throw new Error('Project not found');
+      }
+
+      // Check if sandbox is deployed
+      if (!project.sandboxId) {
+        throw new Error('Sandbox not deployed yet');
+      }
+
+      // Get OpenAI API key from environment
+      const openaiApiKey = process.env.OPENAI_API_KEY;
+      if (!openaiApiKey) {
+        throw new Error('OPENAI_API_KEY not configured on server');
+      }
+
+      // Get database documentation
+      const { getDatabaseDocumentation, generateDashboardPrompt } = await import('./codexService.js');
+      const dbDoc = await getDatabaseDocumentation(projectId);
+      if (!dbDoc) {
+        throw new Error('Database documentation not found. Please analyze the database first.');
+      }
+
+      // Generate or use custom prompt
+      const prompt = customPrompt || generateDashboardPrompt(dbDoc, project.mongoConnectionString);
+
+      // Run Codex on sandbox
+      console.log(`[ProjectService] Executing Codex on sandbox: ${project.sandboxId}`);
+      const result = await daytonaService.runCodexOnSandbox(
+        project.sandboxId,
+        openaiApiKey,
+        prompt
+      );
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to run Codex');
+      }
+
+      console.log(`[ProjectService] Codex execution started successfully`);
+    } catch (error) {
+      console.error(`[ProjectService] Error running Codex: ${error.message}`, error);
+      throw new Error(`Failed to run Codex: ${error.message}`);
+    }
+  }
+
+  /**
+   * Stream project logs from sandbox
+   */
+  async streamProjectLogs(
+    projectId: string,
+    userId: string,
+    onData: (data: { type: string; data: unknown }) => void,
+    onError: (error: Error) => void
+  ): Promise<void> {
+    try {
+      console.log(`[ProjectService] Starting log stream for project: ${projectId}`);
+
+      // Get project
+      const project = await this.getProjectById(projectId, userId);
+      if (!project) {
+        throw new Error('Project not found');
+      }
+
+      // Check if sandbox is deployed
+      if (!project.sandboxId) {
+        throw new Error('Sandbox not deployed yet');
+      }
+
+      // Stream logs in intervals (polling-based approach since we don't have native streaming)
+      let lastLogContent = '';
+      const intervalId = setInterval(async () => {
+        try {
+          const logs = await daytonaService.getSandboxLogs(project.sandboxId as string);
+
+          // Check if there are new logs
+          if (logs && logs !== lastLogContent) {
+            // Get only the new part
+            const newLogs = logs.substring(lastLogContent.length);
+            lastLogContent = logs;
+
+            // Parse each line and send as SSE
+            const lines = newLogs.split('\n').filter((line) => line.trim());
+            for (const line of lines) {
+              // Try to parse as JSON for Codex output
+              try {
+                const jsonLog = JSON.parse(line);
+                onData({ type: 'json', data: jsonLog });
+              } catch {
+                // Send as plain text
+                onData({ type: 'text', data: line });
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`[ProjectService] Error reading logs:`, error);
+          onError(error as Error);
+          clearInterval(intervalId);
+        }
+      }, 2000); // Poll every 2 seconds
+
+      // Stop after 10 minutes
+      setTimeout(() => {
+        clearInterval(intervalId);
+        console.log(`[ProjectService] Log stream ended for project: ${projectId}`);
+      }, 600000);
+    } catch (error) {
+      console.error(`[ProjectService] Error streaming logs: ${error.message}`, error);
+      onError(error as Error);
+    }
+  }
+
 }
 
 export default new ProjectService();

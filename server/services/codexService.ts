@@ -420,3 +420,58 @@ export async function deleteDatabaseDocumentation(
     throw new Error(`Failed to delete documentation: ${errorMessage}`);
   }
 }
+
+/**
+ * Generate a Codex prompt for implementing a dashboard
+ */
+export function generateDashboardPrompt(
+  dbDocumentation: IDatabaseDocumentation,
+  databaseUri: string
+): string {
+  console.log(`[CodexService] Generating dashboard implementation prompt`);
+
+  const doc = dbDocumentation.documentation as unknown as DatabaseAnalysisResult;
+
+  const collectionsInfo = doc.collections
+    .map((col) => {
+      return `
+Collection: ${col.name}
+Document Count: ${col.documentCount}
+${col.description ? `Description: ${col.description}` : ''}
+Sample Schema: ${JSON.stringify(col.sampleSchema, null, 2)}
+Available Keys: ${col.availableKeys.join(', ')}
+Indexes: ${col.indexes.map((idx) => `${idx.name} (${JSON.stringify(idx.keys)})`).join(', ')}
+`;
+    })
+    .join('\n---\n');
+
+  const prompt = `You are implementing a MongoDB dashboard application. Here is the database documentation:
+
+DATABASE SUMMARY:
+${doc.aiSummary}
+
+DATABASE NAME: ${doc.databaseName}
+TOTAL COLLECTIONS: ${doc.totalCollections}
+
+COLLECTIONS:
+${collectionsInfo}
+
+CONNECTION URI:
+${databaseUri}
+
+TASK:
+Implement a simple dashboard for fetching and displaying users from the database.
+
+Requirements:
+1. Create a backend API endpoint to fetch users from the database
+2. Create a frontend component to display the users in a table
+3. Add proper error handling and loading states
+4. Use the provided MongoDB URI to connect to the database
+5. Follow the existing project structure and patterns
+6. Make sure the implementation is clean, readable, and production-ready
+
+Please implement this functionality step by step.`;
+
+  console.log(`[CodexService] Prompt generated successfully`);
+  return prompt;
+}

@@ -139,3 +139,57 @@ export const deploySandbox = async (id: string): Promise<{ message: string }> =>
     throw new Error(err?.response?.data?.error || err?.message || 'Failed to deploy sandbox');
   }
 };
+
+// Description: Run Codex on project sandbox
+// Endpoint: POST /api/projects/:id/run-codex
+// Request: { prompt?: string }
+// Response: { success: boolean, message: string }
+export const runCodexOnProject = async (
+  projectId: string,
+  prompt?: string
+): Promise<{ success: boolean; message: string }> => {
+  try {
+    const response = await api.post(`/api/projects/${projectId}/run-codex`, {
+      prompt,
+    });
+    return response.data;
+  } catch (error: unknown) {
+    console.error('Error running Codex:', error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to run Codex');
+  }
+};
+
+// Description: Stream logs from project sandbox
+// Endpoint: GET /api/projects/:id/logs
+// Request: { follow?: boolean }
+// Response: EventSource stream
+export const streamProjectLogs = (
+  projectId: string,
+  onMessage: (data: { type: string; data: unknown }) => void,
+  onError?: (error: Error) => void
+): EventSource => {
+  const token = localStorage.getItem('accessToken');
+  const eventSource = new EventSource(
+    `/api/projects/${projectId}/logs?token=${token}`
+  );
+
+  eventSource.onmessage = (event) => {
+    try {
+      const parsed = JSON.parse(event.data);
+      onMessage(parsed);
+    } catch (error) {
+      console.error('Error parsing log message:', error);
+    }
+  };
+
+  eventSource.onerror = (error) => {
+    console.error('EventSource error:', error);
+    if (onError) {
+      onError(new Error('Log stream connection error'));
+    }
+    eventSource.close();
+  };
+
+  return eventSource;
+};

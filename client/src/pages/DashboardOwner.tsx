@@ -124,6 +124,7 @@ export function DashboardOwner() {
         <div className="w-[400px] border-r flex-shrink-0">
           <ChatInterface
             dashboardId={project._id}
+            projectId={project._id}
             onDashboardUpdate={handleDashboardUpdate}
           />
         </div>
