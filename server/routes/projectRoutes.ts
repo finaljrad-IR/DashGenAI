@@ -276,7 +276,7 @@ router.post('/:id/run-codex', requireUser(), async (req: Request, res: Response)
     }
 
     // Check if sandbox is deployed
-    if (!project.sandboxInfo?.workspaceId) {
+    if (!project.sandboxId) {
       console.warn(`[POST /api/projects/:id/run-codex] Sandbox not deployed for project: ${id}`);
       return res.status(400).json({ error: 'Sandbox not deployed yet' });
     }
@@ -313,7 +313,7 @@ router.get('/:id/logs', requireUser(), async (req: Request, res: Response) => {
     }
 
     // Check if sandbox is deployed
-    if (!project.sandboxInfo?.workspaceId) {
+    if (!project.sandboxId) {
       console.warn(`[GET /api/projects/:id/logs] Sandbox not deployed for project: ${id}`);
       return res.status(400).json({ error: 'Sandbox not deployed yet' });
     }

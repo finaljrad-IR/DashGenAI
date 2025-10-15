@@ -77,6 +77,7 @@ class DaytonaService {
       // Create a new sandbox with TypeScript language
       const sandbox = await client.create({
         language: 'typescript',
+        public: true,
         envVars: {
           NODE_ENV: 'development',
           PORT: '5173',
@@ -101,15 +102,6 @@ class DaytonaService {
 
       // Store sandbox reference for later use
       activeSandboxes.set(sandbox.id, sandbox);
-
-      // Set sandbox to public (no authentication required)
-      console.log('Setting sandbox to public access...');
-      try {
-        await sandbox.setPublic(true);
-        console.log('Sandbox set to public successfully');
-      } catch (publicError) {
-        console.warn('Could not set sandbox to public, continuing anyway:', publicError);
-      }
 
       // Get preview URL using getPreviewUrl (will be updated after app starts on port 5173)
       console.log('Getting initial preview URL...');
@@ -408,14 +400,6 @@ class DaytonaService {
       const sandbox = activeSandboxes.get(sandboxInfo.sandboxId);
       if (sandbox) {
         try {
-          // Set sandbox to public (no authentication required)
-          console.log('Setting sandbox to public access...');
-          try {
-            await sandbox.setPublic(true);
-            console.log('Sandbox set to public successfully');
-          } catch (publicError) {
-            console.warn('Could not set sandbox to public:', publicError);
-          }
 
           // Wait a moment for the app to start listening on port 5173
           console.log('Waiting for application to start on port 5173...');
