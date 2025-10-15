@@ -19,17 +19,6 @@ export function DashboardOwner() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (id) {
-      loadDashboard();
-      // Poll sandbox status every 5 seconds
-      const interval = setInterval(() => {
-        checkSandboxStatus();
-      }, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [id]);
-
   const loadDashboard = useCallback(async () => {
     if (!id) return
 
@@ -37,10 +26,19 @@ export function DashboardOwner() {
     try {
       const projectData = await getProjectById(id);
       setProject(projectData);
-      setSandboxUrl(projectData.sandboxUrl || '');
+
+      // Ensure sandbox URL is HTTPS
+      let secureUrl = projectData.sandboxUrl || '';
+      if (secureUrl && secureUrl.startsWith('http://')) {
+        secureUrl = secureUrl.replace('http://', 'https://');
+        console.log('Converted sandbox URL to HTTPS:', secureUrl);
+      }
+
+      setSandboxUrl(secureUrl);
       setSandboxStatus(projectData.sandboxStatus || projectData.status || '');
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboard'
+      console.error('Error loading dashboard:', errorMessage);
       toast({
         title: "Error",
         description: errorMessage,
@@ -51,19 +49,42 @@ export function DashboardOwner() {
     }
   }, [id, toast]);
 
-  const checkSandboxStatus = async () => {
+  const checkSandboxStatus = useCallback(async () => {
     if (!id) return;
 
     try {
       const status = await getSandboxStatus(id);
       setSandboxStatus(status.sandboxStatus);
-      if (status.sandboxUrl && status.sandboxUrl !== sandboxUrl) {
-        setSandboxUrl(status.sandboxUrl);
+
+      if (status.sandboxUrl) {
+        // Ensure sandbox URL is HTTPS
+        let secureUrl = status.sandboxUrl;
+        if (secureUrl.startsWith('http://')) {
+          secureUrl = secureUrl.replace('http://', 'https://');
+          console.log('Converted sandbox URL to HTTPS:', secureUrl);
+        }
+
+        if (secureUrl !== sandboxUrl) {
+          setSandboxUrl(secureUrl);
+          // Update project with new URL
+          setProject(prev => prev ? { ...prev, sandboxUrl: secureUrl } : null);
+        }
       }
     } catch (error) {
       console.error('Error checking sandbox status:', error);
     }
-  };
+  }, [id, sandboxUrl]);
+
+  useEffect(() => {
+    if (id) {
+      loadDashboard();
+      // Poll sandbox status every 5 seconds
+      const interval = setInterval(() => {
+        checkSandboxStatus();
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [id, loadDashboard, checkSandboxStatus]);
 
   const handleDashboardUpdate = () => {
     console.log('Dashboard updated, triggering refresh');

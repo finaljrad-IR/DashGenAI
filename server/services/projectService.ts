@@ -282,9 +282,16 @@ class ProjectService {
         projectPath,
       });
 
+      // Ensure sandbox URL is HTTPS
+      let secureUrl = sandboxInfo.sandboxUrl;
+      if (secureUrl && secureUrl.startsWith('http://')) {
+        secureUrl = secureUrl.replace('http://', 'https://');
+        console.log(`[ProjectService] Converted sandbox URL to HTTPS: ${secureUrl}`);
+      }
+
       // Update project with sandbox info
       project.sandboxId = sandboxInfo.sandboxId;
-      project.sandboxUrl = sandboxInfo.sandboxUrl;
+      project.sandboxUrl = secureUrl;
       project.sandboxStatus = sandboxInfo.status;
       project.status = 'active';
       await project.save();

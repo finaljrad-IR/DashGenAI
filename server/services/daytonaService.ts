@@ -109,9 +109,16 @@ class DaytonaService {
         console.log(`Preview URL: ${previewInfo.url}`);
         console.log(`Preview token: ${previewInfo.token ? '[PRESENT]' : '[NOT PRESENT]'}`);
 
+        // Ensure the URL is HTTPS
+        let secureUrl = previewInfo.url;
+        if (secureUrl && secureUrl.startsWith('http://')) {
+          secureUrl = secureUrl.replace('http://', 'https://');
+          console.log(`Converted URL to HTTPS: ${secureUrl}`);
+        }
+
         return {
           sandboxId: sandbox.id,
-          sandboxUrl: previewInfo.url,
+          sandboxUrl: secureUrl,
           status: 'creating',
         };
       } catch (previewError) {
@@ -400,7 +407,14 @@ class DaytonaService {
           console.log(`Preview URL obtained: ${previewInfo.url}`);
           console.log(`Preview token: ${previewInfo.token ? '[PRESENT]' : '[NOT PRESENT]'}`);
 
-          sandboxInfo.sandboxUrl = previewInfo.url;
+          // Ensure the URL is HTTPS
+          let secureUrl = previewInfo.url;
+          if (secureUrl && secureUrl.startsWith('http://')) {
+            secureUrl = secureUrl.replace('http://', 'https://');
+            console.log(`Converted URL to HTTPS: ${secureUrl}`);
+          }
+
+          sandboxInfo.sandboxUrl = secureUrl;
         } catch (previewError) {
           console.error('Error getting preview URL:', previewError);
           console.log('Using fallback URL format');
