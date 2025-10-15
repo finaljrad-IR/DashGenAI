@@ -600,7 +600,7 @@ class DaytonaService {
       // Include the API key in the environment for this specific command
       console.log(`[DaytonaService] Executing Codex with prompt in session`);
       const escapedPrompt = prompt.replace(/"/g, '\\"').replace(/\n/g, '\\n');
-      const codexCommand = `cd workspace && OPENAI_API_KEY="${openaiApiKey}" codex exec --json --skip-git-repo-check "${escapedPrompt}"`;
+      const codexCommand = `cd workspace && OPENAI_API_KEY="${openaiApiKey}" codex exec --json --yolo --skip-git-repo-check "${escapedPrompt}"`;
 
       // Execute the command asynchronously in the session
       const commandResult = await sandbox.process.executeSessionCommand(sessionId, {

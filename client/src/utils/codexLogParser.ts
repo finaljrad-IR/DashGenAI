@@ -122,12 +122,12 @@ function parseItemStarted(data: CodexLogItem): ParsedCodexMessage | null {
 
 /**
  * Parse item.completed messages
- * Only show reasoning type completions with their text
+ * Process reasoning and agent_message type completions with their text
  */
 function parseItemCompleted(data: CodexLogItem): ParsedCodexMessage | null {
   if (!data.item) return null;
 
-  // Only process reasoning completions
+  // Process reasoning completions
   if (data.item.type === 'reasoning') {
     return {
       id: data.item.id,
@@ -135,6 +135,20 @@ function parseItemCompleted(data: CodexLogItem): ParsedCodexMessage | null {
       title: 'Thought',
       description: data.item.text || '',
       icon: '💭',
+      timestamp: Date.now(),
+      status: 'completed',
+      rawData: data,
+    };
+  }
+
+  // Process agent_message completions with collapsible content
+  if (data.item.type === 'agent_message') {
+    return {
+      id: data.item.id,
+      messageType: 'agent_message',
+      title: 'Codex Response',
+      description: data.item.text || '',
+      icon: '🤖',
       timestamp: Date.now(),
       status: 'completed',
       rawData: data,

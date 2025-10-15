@@ -1,4 +1,5 @@
-import { Brain, Terminal, Bot, CheckCircle2 } from "lucide-react";
+import { useState } from "react";
+import { Brain, Terminal, Bot, CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
 import { ParsedCodexMessage } from "@/utils/codexLogParser";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +12,7 @@ interface CodexMessageProps {
  * Displays different UI based on message type (reasoning, command_execution, etc.)
  */
 export function CodexMessage({ message }: CodexMessageProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
   // Get icon based on message type
   const getIcon = () => {
     switch (message.messageType) {
@@ -59,13 +61,18 @@ export function CodexMessage({ message }: CodexMessageProps) {
     }
   };
 
+  // Check if this is an agent_message that should be collapsible
+  const isCollapsible = message.messageType === 'agent_message';
+
   return (
     <div
       className={cn(
         "flex items-start gap-3 p-3 rounded-lg border",
         getBackgroundColor(),
-        getBorderColor()
+        getBorderColor(),
+        isCollapsible && "cursor-pointer hover:shadow-sm transition-shadow"
       )}
+      onClick={() => isCollapsible && setIsExpanded(!isExpanded)}
     >
       {/* Icon */}
       <div className="flex-shrink-0 mt-0.5">
@@ -74,14 +81,32 @@ export function CodexMessage({ message }: CodexMessageProps) {
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        {/* Title */}
-        <div className="font-medium text-sm text-foreground mb-1">
-          {message.title}
+        {/* Title with expand/collapse indicator */}
+        <div className="flex items-center gap-2">
+          <div className="font-medium text-sm text-foreground mb-1 flex-1">
+            {message.title}
+          </div>
+          {isCollapsible && (
+            <div className="flex-shrink-0">
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Description */}
-        {message.description && (
+        {/* Description - for non-collapsible or when expanded */}
+        {message.description && !isCollapsible && (
           <div className="text-xs text-muted-foreground break-words whitespace-pre-wrap font-mono">
+            {message.description}
+          </div>
+        )}
+
+        {/* Collapsible content for agent_message */}
+        {isCollapsible && isExpanded && message.description && (
+          <div className="mt-2 text-xs text-muted-foreground break-words whitespace-pre-wrap font-mono bg-background/50 p-3 rounded border border-current/10">
             {message.description}
           </div>
         )}
