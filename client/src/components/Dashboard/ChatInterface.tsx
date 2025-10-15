@@ -7,6 +7,8 @@ import { Card } from '@/components/ui/card';
 import { sendChatMessage, getChatHistory } from '@/api/dashboards';
 import { runCodexOnProject, streamProjectLogs } from '@/api/projects';
 import { useToast } from '@/hooks/useToast';
+import { parseCodexLogLine, mergeCodexMessages, ParsedCodexMessage } from '@/utils/codexLogParser';
+import { CodexMessage } from './CodexMessage';
 
 interface Message {
   _id: string;
@@ -21,20 +23,13 @@ interface ChatInterfaceProps {
   onDashboardUpdate?: () => void;
 }
 
-interface CodexLog {
-  id: string;
-  type: 'json' | 'text' | 'error';
-  content: string;
-  timestamp: string;
-}
-
 export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isCodexRunning, setIsCodexRunning] = useState(false);
-  const [codexLogs, setCodexLogs] = useState<CodexLog[]>([]);
+  const [codexMessages, setCodexMessages] = useState<ParsedCodexMessage[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const { toast } = useToast();
@@ -64,7 +59,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, codexLogs]);
+  }, [messages, codexMessages]);
 
   useEffect(() => {
     // Cleanup EventSource on unmount
@@ -151,7 +146,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
 
     console.log('Starting Codex execution for project:', projectId);
     setIsCodexRunning(true);
-    setCodexLogs([]);
+    setCodexMessages([]);
 
     try {
       // Start Codex execution and get session info
@@ -171,29 +166,25 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
         (data) => {
           console.log('Received log data:', data);
 
-          const newLog: CodexLog = {
-            id: Date.now().toString() + Math.random(),
-            type: data.type === 'json' ? 'json' : data.type === 'error' ? 'error' : 'text',
-            content: typeof data.data === 'string' ? data.data : JSON.stringify(data.data, null, 2),
-            timestamp: new Date().toISOString(),
-          };
+          // Parse the log data
+          const logContent = typeof data.data === 'string' ? data.data : JSON.stringify(data.data);
+          const parsedMessage = parseCodexLogLine(logContent);
 
-          setCodexLogs(prev => [...prev, newLog]);
+          if (parsedMessage) {
+            setCodexMessages(prev => mergeCodexMessages(prev, [parsedMessage]));
+          }
 
-          // Check if Codex has completed
-          if (data.type === 'json' && typeof data.data === 'object' && data.data !== null) {
-            const jsonData = data.data as { status?: string };
-            if (jsonData.status === 'completed') {
-              console.log('Codex execution completed');
-              setIsCodexRunning(false);
-              if (onDashboardUpdate) {
-                onDashboardUpdate();
-              }
-              toast({
-                title: "Codex Completed",
-                description: "Your dashboard has been updated successfully",
-              });
+          // Check if Codex has completed (turn.completed message)
+          if (parsedMessage && parsedMessage.messageType === 'turn_completed') {
+            console.log('Codex execution completed');
+            setIsCodexRunning(false);
+            if (onDashboardUpdate) {
+              onDashboardUpdate();
             }
+            toast({
+              title: "Codex Completed",
+              description: "Your dashboard has been updated successfully",
+            });
           }
         },
         (error) => {
@@ -309,37 +300,21 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
               </div>
             )}
 
-            {/* Codex Execution Logs */}
-            {codexLogs.length > 0 && (
+            {/* Codex Execution Messages */}
+            {codexMessages.length > 0 && (
               <div className="mt-6 space-y-3">
                 <div className="flex items-center gap-2 mb-3">
                   <Wand2 className="h-4 w-4 text-purple-600" />
                   <h3 className="text-sm font-semibold text-purple-600">Codex Execution</h3>
                   {isCodexRunning && <Loader2 className="h-4 w-4 animate-spin text-purple-600" />}
                 </div>
-                {codexLogs.map((log) => (
-                  <Card
-                    key={log.id}
-                    className={`p-3 animate-in fade-in slide-in-from-bottom-1 ${
-                      log.type === 'json'
-                        ? 'bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800'
-                        : log.type === 'error'
-                        ? 'bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800'
-                        : 'bg-gray-50 border-gray-200 dark:bg-gray-900 dark:border-gray-700'
-                    }`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <div className="flex-1">
-                        <pre className="text-xs whitespace-pre-wrap font-mono overflow-x-auto">
-                          {log.content}
-                        </pre>
-                      </div>
+                <div className="space-y-2">
+                  {codexMessages.map((message) => (
+                    <div key={message.id} className="animate-in fade-in slide-in-from-bottom-1">
+                      <CodexMessage message={message} />
                     </div>
-                    <span className="text-xs text-muted-foreground mt-1 block">
-                      {formatTime(log.timestamp)}
-                    </span>
-                  </Card>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </div>
