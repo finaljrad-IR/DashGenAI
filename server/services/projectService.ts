@@ -355,7 +355,10 @@ class ProjectService {
   /**
    * Run Codex on a project's sandbox
    */
-  async runCodexOnProject(projectId: string, userId: string, customPrompt?: string): Promise<void> {
+  async runCodexOnProject(projectId: string, userId: string, customPrompt?: string): Promise<{
+    sessionId: string;
+    cmdId: string;
+  }> {
     try {
       console.log(`[ProjectService] Running Codex on project: ${projectId}`);
 
@@ -409,11 +412,12 @@ class ProjectService {
         prompt
       );
 
-      if (!result.success) {
+      if (!result.success || !result.sessionId || !result.cmdId) {
         throw new Error(result.error || 'Failed to run Codex');
       }
 
-      console.log(`[ProjectService] Codex execution started successfully`);
+      console.log(`[ProjectService] Codex execution started successfully with session ${result.sessionId}`);
+      return { sessionId: result.sessionId, cmdId: result.cmdId };
     } catch (error) {
       console.error(`[ProjectService] Error running Codex: ${error.message}`, error);
       throw new Error(`Failed to run Codex: ${error.message}`);
@@ -421,16 +425,18 @@ class ProjectService {
   }
 
   /**
-   * Stream project logs from sandbox
+   * Stream project logs from sandbox using session-based streaming
    */
   async streamProjectLogs(
     projectId: string,
     userId: string,
+    sessionId: string,
+    cmdId: string,
     onData: (data: { type: string; data: unknown }) => void,
     onError: (error: Error) => void
   ): Promise<void> {
     try {
-      console.log(`[ProjectService] Starting log stream for project: ${projectId}`);
+      console.log(`[ProjectService] Starting log stream for project: ${projectId}, session: ${sessionId}, cmdId: ${cmdId}`);
 
       // Get project
       const project = await this.getProjectById(projectId, userId);
@@ -443,43 +449,35 @@ class ProjectService {
         throw new Error('Sandbox not deployed yet');
       }
 
-      // Stream logs in intervals (polling-based approach since we don't have native streaming)
-      let lastLogContent = '';
-      const intervalId = setInterval(async () => {
-        try {
-          const logs = await daytonaService.getSandboxLogs(project.sandboxId as string);
-
-          // Check if there are new logs
-          if (logs && logs !== lastLogContent) {
-            // Get only the new part
-            const newLogs = logs.substring(lastLogContent.length);
-            lastLogContent = logs;
-
-            // Parse each line and send as SSE
-            const lines = newLogs.split('\n').filter((line) => line.trim());
-            for (const line of lines) {
-              // Try to parse as JSON for Codex output
-              try {
-                const jsonLog = JSON.parse(line);
-                onData({ type: 'json', data: jsonLog });
-              } catch {
-                // Send as plain text
-                onData({ type: 'text', data: line });
-              }
+      // Stream logs using Daytona session-based streaming
+      await daytonaService.streamSessionLogs(
+        project.sandboxId,
+        sessionId,
+        cmdId,
+        (stdout: string) => {
+          // Process stdout
+          const lines = stdout.split('\n').filter((line) => line.trim());
+          for (const line of lines) {
+            // Try to parse as JSON for Codex output
+            try {
+              const jsonLog = JSON.parse(line);
+              onData({ type: 'json', data: jsonLog });
+            } catch {
+              // Send as plain text
+              onData({ type: 'text', data: line });
             }
           }
-        } catch (error) {
-          console.error(`[ProjectService] Error reading logs:`, error);
-          onError(error as Error);
-          clearInterval(intervalId);
+        },
+        (stderr: string) => {
+          // Process stderr
+          const lines = stderr.split('\n').filter((line) => line.trim());
+          for (const line of lines) {
+            onData({ type: 'error', data: line });
+          }
         }
-      }, 2000); // Poll every 2 seconds
+      );
 
-      // Stop after 10 minutes
-      setTimeout(() => {
-        clearInterval(intervalId);
-        console.log(`[ProjectService] Log stream ended for project: ${projectId}`);
-      }, 600000);
+      console.log(`[ProjectService] Log streaming completed for project: ${projectId}`);
     } catch (error) {
       console.error(`[ProjectService] Error streaming logs: ${error.message}`, error);
       onError(error as Error);

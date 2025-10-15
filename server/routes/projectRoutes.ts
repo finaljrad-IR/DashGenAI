@@ -260,7 +260,7 @@ router.post('/:id/sandbox/deploy', requireUser(), async (req: Request, res: Resp
 // Description: Run Codex on project sandbox to implement dashboard
 // Endpoint: POST /api/projects/:id/run-codex
 // Request: { prompt?: string }
-// Response: { success: boolean, message: string }
+// Response: { success: boolean, message: string, sessionId: string, cmdId: string }
 router.post('/:id/run-codex', requireUser(), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -281,13 +281,15 @@ router.post('/:id/run-codex', requireUser(), async (req: Request, res: Response)
       return res.status(400).json({ error: 'Sandbox not deployed yet' });
     }
 
-    // Run Codex (this will use ProjectService which we'll update)
-    await ProjectService.runCodexOnProject(id, req.user._id.toString(), prompt);
+    // Run Codex and get session info
+    const { sessionId, cmdId } = await ProjectService.runCodexOnProject(id, req.user._id.toString(), prompt);
 
-    console.log(`[POST /api/projects/:id/run-codex] Codex execution started successfully`);
+    console.log(`[POST /api/projects/:id/run-codex] Codex execution started successfully with session ${sessionId}`);
     res.status(200).json({
       success: true,
       message: 'Codex execution started. Check logs for progress.',
+      sessionId,
+      cmdId,
     });
   } catch (error) {
     console.error(`[POST /api/projects/:id/run-codex] Error running Codex:`, error);
@@ -297,13 +299,20 @@ router.post('/:id/run-codex', requireUser(), async (req: Request, res: Response)
 
 // Description: Stream logs from project sandbox
 // Endpoint: GET /api/projects/:id/logs
-// Request: { follow?: boolean }
+// Request: { sessionId: string, cmdId: string } (query parameters)
 // Response: Server-Sent Events (SSE) stream of logs
 router.get('/:id/logs', requireUser(), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const { sessionId, cmdId } = req.query;
 
-    console.log(`[GET /api/projects/:id/logs] Streaming logs for project ${id}`);
+    console.log(`[GET /api/projects/:id/logs] Streaming logs for project ${id}, session: ${sessionId}, cmd: ${cmdId}`);
+
+    // Validate required parameters
+    if (!sessionId || !cmdId) {
+      console.warn(`[GET /api/projects/:id/logs] Missing sessionId or cmdId`);
+      return res.status(400).json({ error: 'sessionId and cmdId are required query parameters' });
+    }
 
     // Get project
     const project = await ProjectService.getProjectById(id, req.user._id.toString());
@@ -330,6 +339,8 @@ router.get('/:id/logs', requireUser(), async (req: Request, res: Response) => {
     await ProjectService.streamProjectLogs(
       id,
       req.user._id.toString(),
+      sessionId as string,
+      cmdId as string,
       (logData) => {
         // Send data as SSE
         res.write(`data: ${JSON.stringify(logData)}\n\n`);

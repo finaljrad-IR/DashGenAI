@@ -143,11 +143,11 @@ export const deploySandbox = async (id: string): Promise<{ message: string }> =>
 // Description: Run Codex on project sandbox
 // Endpoint: POST /api/projects/:id/run-codex
 // Request: { prompt?: string }
-// Response: { success: boolean, message: string }
+// Response: { success: boolean, message: string, sessionId: string, cmdId: string }
 export const runCodexOnProject = async (
   projectId: string,
   prompt?: string
-): Promise<{ success: boolean; message: string }> => {
+): Promise<{ success: boolean; message: string; sessionId: string; cmdId: string }> => {
   try {
     const response = await api.post(`/api/projects/${projectId}/run-codex`, {
       prompt,
@@ -162,16 +162,18 @@ export const runCodexOnProject = async (
 
 // Description: Stream logs from project sandbox
 // Endpoint: GET /api/projects/:id/logs
-// Request: { follow?: boolean }
+// Request: { sessionId: string, cmdId: string } (query parameters)
 // Response: EventSource stream
 export const streamProjectLogs = (
   projectId: string,
+  sessionId: string,
+  cmdId: string,
   onMessage: (data: { type: string; data: unknown }) => void,
   onError?: (error: Error) => void
 ): EventSource => {
   const token = localStorage.getItem('accessToken');
   const eventSource = new EventSource(
-    `/api/projects/${projectId}/logs?token=${token}`
+    `/api/projects/${projectId}/logs?token=${token}&sessionId=${sessionId}&cmdId=${cmdId}`
   );
 
   eventSource.onmessage = (event) => {

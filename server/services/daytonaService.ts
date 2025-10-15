@@ -517,52 +517,46 @@ class DaytonaService {
     sandboxId: string,
     openaiApiKey: string,
     prompt: string
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; sessionId?: string; cmdId?: string; error?: string }> {
     console.log(`[DaytonaService] Running Codex on sandbox ${sandboxId}`);
 
     try {
       // Get or reconnect to the sandbox
-      await this.getOrReconnectSandbox(sandboxId);
+      const sandbox = await this.getOrReconnectSandbox(sandboxId);
 
       // Step 1: Install Codex CLI if not already installed
       console.log(`[DaytonaService] Installing Codex CLI...`);
       const installResult = await this.executeCommand(
         sandboxId,
-        'npm install -g @anthropic-ai/codex-cli || true'
+        'npm install -g @openai/codex || true'
       );
 
       if (!installResult.success) {
         console.warn(`[DaytonaService] Codex CLI installation warning: ${installResult.error}`);
       }
 
-      // Step 2: Set OpenAI API key as environment variable
-      console.log(`[DaytonaService] Setting OPENAI_API_KEY environment variable`);
-      const setEnvResult = await this.executeCommand(
-        sandboxId,
-        `export OPENAI_API_KEY="${openaiApiKey}"`
-      );
+      // Step 2: Create a process session for streaming
+      const sessionId = `codex-session-${Date.now()}`;
+      console.log(`[DaytonaService] Creating process session: ${sessionId}`);
+      await sandbox.process.createSession(sessionId);
 
-      if (!setEnvResult.success) {
-        throw new Error(`Failed to set OPENAI_API_KEY: ${setEnvResult.error}`);
-      }
-
-      // Step 3: Run Codex in JSON mode with the prompt
-      console.log(`[DaytonaService] Executing Codex with prompt`);
+      // Step 3: Run Codex in JSON mode with the prompt using the session
+      console.log(`[DaytonaService] Executing Codex with prompt in session`);
       const escapedPrompt = prompt.replace(/"/g, '\\"').replace(/\n/g, '\\n');
-      const codexCommand = `cd workspace && OPENAI_API_KEY="${openaiApiKey}" codex exec --json "${escapedPrompt}"`;
+      const codexCommand = `cd workspace && OPENAI_API_KEY="${openaiApiKey}" codex exec --json --skip-git-repo-check "${escapedPrompt}"`;
 
-      // Start the Codex command in the background
-      const codexResult = await this.executeCommand(
-        sandboxId,
-        `nohup sh -c '${codexCommand}' > /tmp/codex.log 2>&1 &`
-      );
+      // Execute the command asynchronously in the session
+      const commandResult = await sandbox.process.executeSessionCommand(sessionId, {
+        command: codexCommand,
+        runAsync: true,
+      });
 
-      if (!codexResult.success) {
-        throw new Error(`Failed to run Codex: ${codexResult.error}`);
+      if (!commandResult.cmdId) {
+        throw new Error('Failed to get command ID from Codex execution');
       }
 
-      console.log(`[DaytonaService] Codex execution initiated successfully`);
-      return { success: true };
+      console.log(`[DaytonaService] Codex execution initiated successfully with cmdId: ${commandResult.cmdId}`);
+      return { success: true, sessionId, cmdId: commandResult.cmdId };
     } catch (error) {
       console.error(`[DaytonaService] Error running Codex:`, error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -570,7 +564,45 @@ class DaytonaService {
   }
 
   /**
+   * Stream logs from a sandbox session command
+   */
+  async streamSessionLogs(
+    sandboxId: string,
+    sessionId: string,
+    cmdId: string,
+    onStdout: (data: string) => void,
+    onStderr: (data: string) => void
+  ): Promise<void> {
+    console.log(`[DaytonaService] Streaming logs for session ${sessionId}, command ${cmdId}`);
+
+    try {
+      // Get or reconnect to the sandbox
+      const sandbox = await this.getOrReconnectSandbox(sandboxId);
+
+      // Stream logs with separate callbacks for stdout and stderr
+      await sandbox.process.getSessionCommandLogs(
+        sessionId,
+        cmdId,
+        (stdout: string) => {
+          console.log('[STDOUT]:', stdout);
+          onStdout(stdout);
+        },
+        (stderr: string) => {
+          console.log('[STDERR]:', stderr);
+          onStderr(stderr);
+        }
+      );
+
+      console.log(`[DaytonaService] Log streaming completed for session ${sessionId}`);
+    } catch (error) {
+      console.error(`[DaytonaService] Error streaming logs:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Get logs from the sandbox (for streaming Codex output)
+   * @deprecated Use streamSessionLogs instead for better real-time streaming
    */
   async getSandboxLogs(sandboxId: string, logFile: string = '/tmp/codex.log'): Promise<string> {
     console.log(`[DaytonaService] Getting logs from sandbox ${sandboxId}: ${logFile}`);

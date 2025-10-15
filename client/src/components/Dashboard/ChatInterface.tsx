@@ -154,7 +154,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
     setCodexLogs([]);
 
     try {
-      // Start Codex execution
+      // Start Codex execution and get session info
       const response = await runCodexOnProject(projectId);
       console.log('Codex execution started:', response);
 
@@ -163,9 +163,11 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
         description: response.message || "Codex is now running on your project",
       });
 
-      // Start streaming logs
+      // Start streaming logs with session info
       const eventSource = streamProjectLogs(
         projectId,
+        response.sessionId,
+        response.cmdId,
         (data) => {
           console.log('Received log data:', data);
 
