@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
 import { sendChatMessage, getChatHistory } from '@/api/dashboards';
-import { runCodexOnProject, streamProjectLogs } from '@/api/projects';
+import { runCodexOnProject, streamProjectLogs, saveCodexMessage, getCodexMessages } from '@/api/projects';
 import { useToast } from '@/hooks/useToast';
 import { parseCodexLogLine, mergeCodexMessages, ParsedCodexMessage } from '@/utils/codexLogParser';
 import { CodexMessage } from './CodexMessage';
@@ -53,9 +53,60 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
     }
   }, [dashboardId, toast])
 
+  const loadCodexMessages = useCallback(async () => {
+    if (!projectId) return;
+
+    try {
+      console.log('Loading saved Codex messages for project:', projectId);
+      const savedMessages = await getCodexMessages(projectId);
+
+      // Convert saved messages to ParsedCodexMessage format
+      const parsedMessages: ParsedCodexMessage[] = savedMessages.map((msg) => ({
+        id: msg._id,
+        messageType: msg.messageType,
+        title: msg.title,
+        description: msg.description,
+        icon: msg.icon,
+        timestamp: msg.timestamp,
+        status: msg.status,
+        rawData: msg.rawData,
+      }));
+
+      console.log(`Loaded ${parsedMessages.length} saved Codex messages`);
+      setCodexMessages(parsedMessages);
+    } catch (error: unknown) {
+      console.error('Error loading Codex messages:', error);
+      // Don't show error toast for loading messages, just log it
+    }
+  }, [projectId])
+
+  const persistCodexMessage = useCallback(async (message: ParsedCodexMessage) => {
+    if (!projectId) return;
+
+    try {
+      await saveCodexMessage(projectId, {
+        messageType: message.messageType,
+        title: message.title,
+        description: message.description,
+        icon: message.icon,
+        timestamp: message.timestamp,
+        status: message.status,
+        rawData: message.rawData as Record<string, unknown>,
+      });
+      console.log('Codex message persisted:', message.id);
+    } catch (error: unknown) {
+      console.error('Error persisting Codex message:', error);
+      // Don't show error toast, just log it to avoid cluttering the UI
+    }
+  }, [projectId])
+
   useEffect(() => {
     loadChatHistory();
   }, [dashboardId, loadChatHistory]);
+
+  useEffect(() => {
+    loadCodexMessages();
+  }, [projectId, loadCodexMessages]);
 
   useEffect(() => {
     scrollToBottom();
@@ -172,6 +223,9 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
 
           if (parsedMessage) {
             setCodexMessages(prev => mergeCodexMessages(prev, [parsedMessage]));
+
+            // Persist the message to the database
+            persistCodexMessage(parsedMessage);
           }
 
           // Check if Codex has completed (turn.completed message)

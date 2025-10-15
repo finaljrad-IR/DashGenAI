@@ -54,8 +54,8 @@ export function parseCodexLogLine(logLine: string): ParsedCodexMessage | null {
       return parseTurnCompleted(data);
     }
 
-    // Unknown message type
-    return null;
+    // Unknown message type - show it as unparsed
+    return parseUnknownMessage(data);
   } catch (error) {
     // Not valid JSON or parsing error, ignore
     console.debug('Failed to parse Codex log line:', error);
@@ -134,6 +134,22 @@ function parseTurnCompleted(data: CodexLogItem): ParsedCodexMessage {
 }
 
 /**
+ * Parse unknown/unparsed messages
+ */
+function parseUnknownMessage(data: CodexLogItem): ParsedCodexMessage {
+  return {
+    id: `unknown-${Date.now()}-${Math.random()}`,
+    messageType: 'unknown',
+    title: `Unknown message type: ${data.type}`,
+    description: JSON.stringify(data, null, 2),
+    icon: '❓',
+    timestamp: Date.now(),
+    status: 'completed',
+    rawData: data,
+  };
+}
+
+/**
  * Parse multiple log lines at once
  */
 export function parseCodexLogs(logs: string): ParsedCodexMessage[] {
@@ -152,12 +168,25 @@ export function parseCodexLogs(logs: string): ParsedCodexMessage[] {
 
 /**
  * Merge new messages with existing ones, avoiding duplicates
+ * When a new message arrives, mark all previous messages as "completed"
  */
 export function mergeCodexMessages(
   existing: ParsedCodexMessage[],
   newMessages: ParsedCodexMessage[]
 ): ParsedCodexMessage[] {
+  if (newMessages.length === 0) {
+    return existing;
+  }
+
+  // Mark all existing messages as completed
+  const updatedExisting = existing.map(msg => ({
+    ...msg,
+    status: 'completed' as const,
+  }));
+
+  // Filter out duplicate new messages
   const existingIds = new Set(existing.map(m => m.id));
   const uniqueNew = newMessages.filter(m => !existingIds.has(m.id));
-  return [...existing, ...uniqueNew];
+
+  return [...updatedExisting, ...uniqueNew];
 }

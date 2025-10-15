@@ -195,3 +195,75 @@ export const streamProjectLogs = (
 
   return eventSource;
 };
+
+export interface CodexMessage {
+  _id: string;
+  projectId: string;
+  messageType: 'reasoning' | 'command_execution' | 'agent_message' | 'turn_completed' | 'unknown';
+  title: string;
+  description?: string;
+  icon?: string;
+  timestamp: number;
+  status: 'in_progress' | 'completed';
+  rawData?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SaveCodexMessageInput {
+  messageType: 'reasoning' | 'command_execution' | 'agent_message' | 'turn_completed' | 'unknown';
+  title: string;
+  description?: string;
+  icon?: string;
+  timestamp: number;
+  status?: 'in_progress' | 'completed';
+  rawData?: Record<string, unknown>;
+}
+
+// Description: Save a Codex message for a project
+// Endpoint: POST /api/projects/:id/codex-messages
+// Request: { messageType: string, title: string, description?: string, icon?: string, timestamp: number, status?: string, rawData?: object }
+// Response: { message: CodexMessage }
+export const saveCodexMessage = async (
+  projectId: string,
+  data: SaveCodexMessageInput
+): Promise<CodexMessage> => {
+  try {
+    const response = await api.post(`/api/projects/${projectId}/codex-messages`, data);
+    return response.data.message;
+  } catch (error: unknown) {
+    console.error('Error saving Codex message:', error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to save Codex message');
+  }
+};
+
+// Description: Get all Codex messages for a project
+// Endpoint: GET /api/projects/:id/codex-messages
+// Request: {}
+// Response: { messages: Array<CodexMessage> }
+export const getCodexMessages = async (projectId: string): Promise<CodexMessage[]> => {
+  try {
+    const response = await api.get(`/api/projects/${projectId}/codex-messages`);
+    return response.data.messages;
+  } catch (error: unknown) {
+    console.error('Error fetching Codex messages:', error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch Codex messages');
+  }
+};
+
+// Description: Delete all Codex messages for a project
+// Endpoint: DELETE /api/projects/:id/codex-messages
+// Request: {}
+// Response: { message: string, deletedCount: number }
+export const deleteCodexMessages = async (projectId: string): Promise<{ message: string; deletedCount: number }> => {
+  try {
+    const response = await api.delete(`/api/projects/${projectId}/codex-messages`);
+    return response.data;
+  } catch (error: unknown) {
+    console.error('Error deleting Codex messages:', error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to delete Codex messages');
+  }
+};

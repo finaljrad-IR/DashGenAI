@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import { requireUser } from './middlewares/auth.js';
 import ProjectService from '../services/projectService.js';
 import TemplateService from '../services/templateService.js';
+import CodexMessageService from '../services/codexMessageService.js';
 
 const router = express.Router();
 
@@ -359,6 +360,112 @@ router.get('/:id/logs', requireUser(), async (req: Request, res: Response) => {
     if (!res.headersSent) {
       res.status(500).json({ error: error.message || 'Failed to stream logs' });
     }
+  }
+});
+
+// Description: Save a Codex message for a project
+// Endpoint: POST /api/projects/:id/codex-messages
+// Request: { messageType: string, title: string, description?: string, icon?: string, timestamp: number, status?: string, rawData?: object }
+// Response: { message: ICodexMessage }
+router.post('/:id/codex-messages', requireUser(), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { messageType, title, description, icon, timestamp, status, rawData } = req.body;
+
+    console.log(`[POST /api/projects/:id/codex-messages] Saving Codex message for project: ${id}`);
+
+    // Validate required fields
+    if (!messageType || !title || timestamp === undefined) {
+      console.warn('[POST /api/projects/:id/codex-messages] Missing required fields');
+      return res.status(400).json({ error: 'messageType, title, and timestamp are required' });
+    }
+
+    // Verify project exists and belongs to user
+    const project = await ProjectService.getProjectById(id, req.user._id.toString());
+    if (!project) {
+      console.warn(`[POST /api/projects/:id/codex-messages] Project not found: ${id}`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Create message
+    const message = await CodexMessageService.createMessage({
+      projectId: id,
+      messageType,
+      title,
+      description,
+      icon,
+      timestamp,
+      status,
+      rawData,
+    });
+
+    console.log(`[POST /api/projects/:id/codex-messages] Codex message saved successfully: ${message._id}`);
+    res.status(201).json({ message });
+  } catch (error) {
+    console.error('[POST /api/projects/:id/codex-messages] Error saving Codex message:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to save Codex message',
+    });
+  }
+});
+
+// Description: Get all Codex messages for a project
+// Endpoint: GET /api/projects/:id/codex-messages
+// Request: {}
+// Response: { messages: Array<ICodexMessage> }
+router.get('/:id/codex-messages', requireUser(), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    console.log(`[GET /api/projects/:id/codex-messages] Fetching Codex messages for project: ${id}`);
+
+    // Verify project exists and belongs to user
+    const project = await ProjectService.getProjectById(id, req.user._id.toString());
+    if (!project) {
+      console.warn(`[GET /api/projects/:id/codex-messages] Project not found: ${id}`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Get messages
+    const messages = await CodexMessageService.getProjectMessages(id);
+
+    console.log(`[GET /api/projects/:id/codex-messages] Retrieved ${messages.length} Codex messages`);
+    res.status(200).json({ messages });
+  } catch (error) {
+    console.error('[GET /api/projects/:id/codex-messages] Error fetching Codex messages:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to fetch Codex messages',
+    });
+  }
+});
+
+// Description: Delete all Codex messages for a project
+// Endpoint: DELETE /api/projects/:id/codex-messages
+// Request: {}
+// Response: { message: string, deletedCount: number }
+router.delete('/:id/codex-messages', requireUser(), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    console.log(`[DELETE /api/projects/:id/codex-messages] Deleting Codex messages for project: ${id}`);
+
+    // Verify project exists and belongs to user
+    const project = await ProjectService.getProjectById(id, req.user._id.toString());
+    if (!project) {
+      console.warn(`[DELETE /api/projects/:id/codex-messages] Project not found: ${id}`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Delete messages
+    const deletedCount = await CodexMessageService.deleteProjectMessages(id);
+
+    console.log(`[DELETE /api/projects/:id/codex-messages] Deleted ${deletedCount} Codex messages`);
+    res.status(200).json({ message: 'Codex messages deleted successfully', deletedCount });
+  } catch (error) {
+    console.error('[DELETE /api/projects/:id/codex-messages] Error deleting Codex messages:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to delete Codex messages',
+    });
   }
 });
 
