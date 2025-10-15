@@ -376,11 +376,26 @@ class ProjectService {
         throw new Error('OPENAI_API_KEY not configured on server');
       }
 
-      // Get database documentation
-      const { getDatabaseDocumentation, generateDashboardPrompt } = await import('./codexService.js');
-      const dbDoc = await getDatabaseDocumentation(projectId);
+      // Get or create database documentation
+      const { getDatabaseDocumentation, analyzeDatabase, generateDashboardPrompt } = await import('./codexService.js');
+      let dbDoc = await getDatabaseDocumentation(projectId);
+
       if (!dbDoc) {
-        throw new Error('Database documentation not found. Please analyze the database first.');
+        console.log(`[ProjectService] No database documentation found. Analyzing database...`);
+
+        // Check if we have a valid MongoDB connection string
+        if (!project.mongoConnectionString) {
+          throw new Error('MongoDB connection string not found in project');
+        }
+
+        try {
+          // Analyze the database and create documentation
+          dbDoc = await analyzeDatabase(project.mongoConnectionString, projectId);
+          console.log(`[ProjectService] Database analyzed successfully`);
+        } catch (analyzeError) {
+          console.error(`[ProjectService] Failed to analyze database:`, analyzeError);
+          throw new Error(`Failed to analyze database: ${analyzeError.message}. Please check your MongoDB connection string.`);
+        }
       }
 
       // Generate or use custom prompt
