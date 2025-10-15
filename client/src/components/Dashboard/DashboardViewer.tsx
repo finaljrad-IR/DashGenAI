@@ -80,9 +80,10 @@ export function DashboardViewer({ previewUrl, refreshTrigger = 0 }: DashboardVie
             id="dashboard-iframe"
             src={previewUrl}
             className="w-full h-full border-0"
+            style={{ pointerEvents: 'auto' }}
             title="Dashboard Preview"
             onLoad={handleIframeLoad}
-            sandbox="allow-scripts allow-same-origin allow-forms"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-pointer-lock"
           />
         </Card>
       </div>

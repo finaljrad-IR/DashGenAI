@@ -108,7 +108,7 @@ export function DashboardOwner() {
         </div>
 
         <div className="flex-1">
-          {sandboxUrl && sandboxStatus === 'running' ? (
+          {sandboxUrl ? (
             <DashboardViewer
               previewUrl={sandboxUrl}
               refreshTrigger={refreshTrigger}
