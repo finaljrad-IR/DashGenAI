@@ -39,14 +39,19 @@ export function parseCodexLogLine(logLine: string): ParsedCodexMessage | null {
     // Try to parse as JSON
     const data: CodexLogItem = JSON.parse(logLine);
 
+    // Ignore these message types per user requirements
+    if (data.type === 'thread.started' || data.type === 'turn.started') {
+      return null;
+    }
+
     // Handle item.started events
     if (data.type === 'item.started' && data.item) {
       return parseItemStarted(data);
     }
 
-    // Handle item.completed events - we ignore these per requirements
-    if (data.type === 'item.completed') {
-      return null;
+    // Handle item.completed events
+    if (data.type === 'item.completed' && data.item) {
+      return parseItemCompleted(data);
     }
 
     // Handle turn.completed events
@@ -112,6 +117,31 @@ function parseItemStarted(data: CodexLogItem): ParsedCodexMessage | null {
     };
   }
 
+  return null;
+}
+
+/**
+ * Parse item.completed messages
+ * Only show reasoning type completions with their text
+ */
+function parseItemCompleted(data: CodexLogItem): ParsedCodexMessage | null {
+  if (!data.item) return null;
+
+  // Only process reasoning completions
+  if (data.item.type === 'reasoning') {
+    return {
+      id: data.item.id,
+      messageType: 'reasoning',
+      title: 'Thought',
+      description: data.item.text || '',
+      icon: '💭',
+      timestamp: Date.now(),
+      status: 'completed',
+      rawData: data,
+    };
+  }
+
+  // Ignore other item.completed types
   return null;
 }
 

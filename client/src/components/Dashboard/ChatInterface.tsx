@@ -32,6 +32,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
   const [codexMessages, setCodexMessages] = useState<ParsedCodexMessage[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const logBufferRef = useRef<string>('');
   const { toast } = useToast();
 
   const loadChatHistory = useCallback(async () => {
@@ -198,6 +199,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
     console.log('Starting Codex execution for project:', projectId);
     setIsCodexRunning(true);
     setCodexMessages([]);
+    logBufferRef.current = ''; // Reset buffer
 
     try {
       // Start Codex execution and get session info
@@ -217,28 +219,66 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
         (data) => {
           console.log('Received log data:', data);
 
-          // Parse the log data
+          // Handle the log data - it can be partial JSON
           const logContent = typeof data.data === 'string' ? data.data : JSON.stringify(data.data);
-          const parsedMessage = parseCodexLogLine(logContent);
 
-          if (parsedMessage) {
-            setCodexMessages(prev => mergeCodexMessages(prev, [parsedMessage]));
+          // If this is already a parsed object (type: "json"), try to parse directly
+          if (data.type === 'json' && typeof data.data === 'object') {
+            const parsedMessage = parseCodexLogLine(JSON.stringify(data.data));
 
-            // Persist the message to the database
-            persistCodexMessage(parsedMessage);
+            if (parsedMessage) {
+              setCodexMessages(prev => mergeCodexMessages(prev, [parsedMessage]));
+              persistCodexMessage(parsedMessage);
+            }
+
+            // Check if Codex has completed
+            if (parsedMessage && parsedMessage.messageType === 'turn_completed') {
+              console.log('Codex execution completed');
+              setIsCodexRunning(false);
+              logBufferRef.current = ''; // Clear buffer on completion
+              if (onDashboardUpdate) {
+                onDashboardUpdate();
+              }
+              toast({
+                title: "Codex Completed",
+                description: "Your dashboard has been updated successfully",
+              });
+            }
+            return;
           }
 
-          // Check if Codex has completed (turn.completed message)
-          if (parsedMessage && parsedMessage.messageType === 'turn_completed') {
-            console.log('Codex execution completed');
-            setIsCodexRunning(false);
-            if (onDashboardUpdate) {
-              onDashboardUpdate();
+          // Handle partial text messages - accumulate in buffer
+          if (data.type === 'text') {
+            logBufferRef.current += logContent;
+
+            // Try to parse the accumulated buffer
+            try {
+              const parsedMessage = parseCodexLogLine(logBufferRef.current);
+
+              if (parsedMessage) {
+                setCodexMessages(prev => mergeCodexMessages(prev, [parsedMessage]));
+                persistCodexMessage(parsedMessage);
+
+                // Clear buffer on successful parse
+                logBufferRef.current = '';
+
+                // Check if Codex has completed
+                if (parsedMessage.messageType === 'turn_completed') {
+                  console.log('Codex execution completed');
+                  setIsCodexRunning(false);
+                  if (onDashboardUpdate) {
+                    onDashboardUpdate();
+                  }
+                  toast({
+                    title: "Codex Completed",
+                    description: "Your dashboard has been updated successfully",
+                  });
+                }
+              }
+            } catch (error) {
+              // JSON not complete yet, keep accumulating
+              console.debug('Buffering partial JSON, size:', logBufferRef.current.length);
             }
-            toast({
-              title: "Codex Completed",
-              description: "Your dashboard has been updated successfully",
-            });
           }
         },
         (error) => {
