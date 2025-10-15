@@ -297,24 +297,59 @@ class DaytonaService {
   }
 
   /**
+   * Get or reconnect to an existing sandbox by ID
+   */
+  private async getOrReconnectSandbox(sandboxId: string): Promise<any> {
+    console.log(`[DaytonaService] Getting or reconnecting to sandbox ${sandboxId}`);
+
+    // Check if sandbox is already in memory
+    let sandbox = activeSandboxes.get(sandboxId);
+    if (sandbox) {
+      console.log(`[DaytonaService] Sandbox ${sandboxId} found in memory`);
+      return sandbox;
+    }
+
+    // Sandbox not in memory, try to reconnect via Daytona API
+    console.log(`[DaytonaService] Sandbox not in memory, reconnecting via Daytona API...`);
+    const client = this.ensureClient();
+
+    try {
+      // Get the sandbox from Daytona API
+      sandbox = await client.get(sandboxId);
+
+      if (!sandbox) {
+        throw new Error(`Sandbox ${sandboxId} not found in Daytona`);
+      }
+
+      console.log(`[DaytonaService] Successfully reconnected to sandbox ${sandboxId}`);
+
+      // Store in memory for future use
+      activeSandboxes.set(sandboxId, sandbox);
+
+      return sandbox;
+    } catch (error) {
+      console.error(`[DaytonaService] Error reconnecting to sandbox:`, error);
+      throw new Error(`Failed to reconnect to sandbox ${sandboxId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Get sandbox status
    */
   async getSandboxStatus(sandboxId: string): Promise<'creating' | 'running' | 'stopped' | 'failed'> {
     console.log(`Getting status for sandbox ${sandboxId}`);
-    const sandbox = activeSandboxes.get(sandboxId);
-
-    if (!sandbox) {
-      // Sandbox not found in memory, assume it's stopped or deleted
-      return 'stopped';
-    }
 
     try {
+      // Try to get or reconnect to the sandbox
+      const sandbox = await this.getOrReconnectSandbox(sandboxId);
+
       // Try to execute a simple command to check if sandbox is responsive
       await sandbox.process.executeCommand('echo "alive"');
       return 'running';
     } catch (error) {
       console.error('Error getting sandbox status:', error);
-      return 'failed';
+      // If we can't reconnect or execute command, consider it stopped
+      return 'stopped';
     }
   }
 
@@ -461,13 +496,11 @@ class DaytonaService {
     command: string
   ): Promise<{ success: boolean; output?: string; error?: string }> {
     console.log(`[DaytonaService] Executing command on sandbox ${sandboxId}: ${command}`);
-    const sandbox = activeSandboxes.get(sandboxId);
-
-    if (!sandbox) {
-      throw new Error(`Sandbox ${sandboxId} not found`);
-    }
 
     try {
+      // Get or reconnect to the sandbox
+      const sandbox = await this.getOrReconnectSandbox(sandboxId);
+
       const response = await sandbox.process.executeCommand(command);
       console.log(`[DaytonaService] Command executed successfully`);
       return { success: true, output: response.result };
@@ -486,13 +519,11 @@ class DaytonaService {
     prompt: string
   ): Promise<{ success: boolean; error?: string }> {
     console.log(`[DaytonaService] Running Codex on sandbox ${sandboxId}`);
-    const sandbox = activeSandboxes.get(sandboxId);
-
-    if (!sandbox) {
-      throw new Error(`Sandbox ${sandboxId} not found`);
-    }
 
     try {
+      // Get or reconnect to the sandbox
+      await this.getOrReconnectSandbox(sandboxId);
+
       // Step 1: Install Codex CLI if not already installed
       console.log(`[DaytonaService] Installing Codex CLI...`);
       const installResult = await this.executeCommand(
@@ -543,13 +574,11 @@ class DaytonaService {
    */
   async getSandboxLogs(sandboxId: string, logFile: string = '/tmp/codex.log'): Promise<string> {
     console.log(`[DaytonaService] Getting logs from sandbox ${sandboxId}: ${logFile}`);
-    const sandbox = activeSandboxes.get(sandboxId);
-
-    if (!sandbox) {
-      throw new Error(`Sandbox ${sandboxId} not found`);
-    }
 
     try {
+      // Get or reconnect to the sandbox
+      const sandbox = await this.getOrReconnectSandbox(sandboxId);
+
       const response = await sandbox.process.executeCommand(`tail -n 100 ${logFile} 2>/dev/null || echo ""`);
       return response.result || '';
     } catch (error) {
