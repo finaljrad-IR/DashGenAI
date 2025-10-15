@@ -39,25 +39,6 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
   const eventSourceRef = useRef<EventSource | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadChatHistory();
-  }, [dashboardId, loadChatHistory]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, codexLogs]);
-
-  useEffect(() => {
-    // Cleanup EventSource on unmount
-    return () => {
-      if (eventSourceRef.current) {
-        console.log('Closing EventSource connection');
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
-    };
-  }, []);
-
   const loadChatHistory = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -76,6 +57,25 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
       setIsLoading(false);
     }
   }, [dashboardId, toast])
+
+  useEffect(() => {
+    loadChatHistory();
+  }, [dashboardId, loadChatHistory]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, codexLogs]);
+
+  useEffect(() => {
+    // Cleanup EventSource on unmount
+    return () => {
+      if (eventSourceRef.current) {
+        console.log('Closing EventSource connection');
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, []);
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
