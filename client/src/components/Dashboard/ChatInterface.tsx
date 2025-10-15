@@ -251,33 +251,44 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
           if (data.type === 'text') {
             logBufferRef.current += logContent;
 
-            // Try to parse the accumulated buffer
-            try {
-              const parsedMessage = parseCodexLogLine(logBufferRef.current);
+            // Split by newlines to handle multiple complete JSON objects
+            const lines = logBufferRef.current.split('\n');
 
-              if (parsedMessage) {
-                setCodexMessages(prev => mergeCodexMessages(prev, [parsedMessage]));
-                persistCodexMessage(parsedMessage);
+            // Keep the last line in buffer (might be incomplete)
+            logBufferRef.current = lines.pop() || '';
 
-                // Clear buffer on successful parse
-                logBufferRef.current = '';
+            // Try to parse each complete line
+            for (const line of lines) {
+              const trimmedLine = line.trim();
+              if (!trimmedLine) continue;
 
-                // Check if Codex has completed
-                if (parsedMessage.messageType === 'turn_completed') {
-                  console.log('Codex execution completed');
-                  setIsCodexRunning(false);
-                  if (onDashboardUpdate) {
-                    onDashboardUpdate();
+              try {
+                const parsedMessage = parseCodexLogLine(trimmedLine);
+
+                if (parsedMessage) {
+                  setCodexMessages(prev => mergeCodexMessages(prev, [parsedMessage]));
+                  persistCodexMessage(parsedMessage);
+
+                  // Check if Codex has completed
+                  if (parsedMessage.messageType === 'turn_completed') {
+                    console.log('Codex execution completed');
+                    setIsCodexRunning(false);
+                    logBufferRef.current = ''; // Clear buffer on completion
+                    if (onDashboardUpdate) {
+                      onDashboardUpdate();
+                    }
+                    toast({
+                      title: "Codex Completed",
+                      description: "Your dashboard has been updated successfully",
+                    });
                   }
-                  toast({
-                    title: "Codex Completed",
-                    description: "Your dashboard has been updated successfully",
-                  });
                 }
+              } catch (error) {
+                console.debug('Failed to parse line, will retry with next chunk:', error);
+                // Put the failed line back in buffer with newline
+                logBufferRef.current = trimmedLine + '\n' + logBufferRef.current;
+                break; // Stop processing, wait for more data
               }
-            } catch (error) {
-              // JSON not complete yet, keep accumulating
-              console.debug('Buffering partial JSON, size:', logBufferRef.current.length);
             }
           }
         },
