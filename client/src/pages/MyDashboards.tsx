@@ -25,10 +25,6 @@ export function MyDashboards() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
-
   const loadProjects = useCallback(async () => {
     setIsLoading(true)
     try {
@@ -45,6 +41,10 @@ export function MyDashboards() {
       setIsLoading(false)
     }
   }, [toast])
+
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
 
   const handleDelete = (project: Project, e: React.MouseEvent) => {
     e.stopPropagation();
