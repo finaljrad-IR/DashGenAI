@@ -105,7 +105,7 @@ class DaytonaService {
       // Get preview URL using getPreviewUrl (will be updated after app starts on port 5173)
       console.log('Getting initial preview URL...');
       try {
-        const previewInfo = await sandbox.getPreviewUrl(5173);
+        const previewInfo = await sandbox.getPreviewLink(5173);
         console.log(`Preview URL: ${previewInfo.url}`);
         console.log(`Preview token: ${previewInfo.token ? '[PRESENT]' : '[NOT PRESENT]'}`);
 
@@ -396,7 +396,7 @@ class DaytonaService {
           console.log('Waiting for application to start on port 5173...');
           await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
 
-          const previewInfo = await sandbox.getPreviewUrl(5173);
+          const previewInfo = await sandbox.getPreviewLink(5173);
           console.log(`Preview URL obtained: ${previewInfo.url}`);
           console.log(`Preview token: ${previewInfo.token ? '[PRESENT]' : '[NOT PRESENT]'}`);
 
