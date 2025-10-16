@@ -602,7 +602,7 @@ class DaytonaService {
       const escapedPrompt = prompt.replace(/'/g, "'\\''").replace(/\n/g, ' ');
 
       // Build command parts
-      let claudeCommand = `cd workspace && ANTHROPIC_API_KEY='${anthropicApiKey}' claude -p '${escapedPrompt}' --output-format stream-json --dangerously-skip-permissions --model haiku`;
+      let claudeCommand = `cd workspace && ANTHROPIC_API_KEY='${anthropicApiKey}' claude -p '${escapedPrompt}' --output-format stream-json --verbose --dangerously-skip-permissions --model haiku`;
 
       // Add system prompt if provided
       if (systemPrompt) {
