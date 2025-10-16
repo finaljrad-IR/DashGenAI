@@ -21,8 +21,8 @@ interface SandboxInfo {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const activeSandboxes = new Map<string, any>();
 
-// Track which sandboxes have Codex authenticated
-const codexAuthenticatedSandboxes = new Set<string>();
+// Track which sandboxes have Claude Code authenticated
+const claudeAuthenticatedSandboxes = new Set<string>();
 
 class DaytonaService {
   private client: Daytona | null = null;
@@ -302,6 +302,7 @@ class DaytonaService {
   /**
    * Get or reconnect to an existing sandbox by ID
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async getOrReconnectSandbox(sandboxId: string): Promise<any> {
     console.log(`[DaytonaService] Getting or reconnecting to sandbox ${sandboxId}`);
 
@@ -397,7 +398,7 @@ class DaytonaService {
 
       // Remove from active sandboxes and authentication tracking
       activeSandboxes.delete(sandboxId);
-      codexAuthenticatedSandboxes.delete(sandboxId);
+      claudeAuthenticatedSandboxes.delete(sandboxId);
 
       console.log(`Sandbox ${sandboxId} deleted successfully`);
     } catch (error) {
@@ -515,166 +516,124 @@ class DaytonaService {
   }
 
   /**
-   * Setup Codex authentication on the sandbox
-   * This must be run after Codex installation and before running any Codex commands
+   * Setup Claude Code authentication on the sandbox
+   * This must be run after Claude Code installation and before running any Claude Code commands
    */
-  private async setupCodexAuthentication(sandboxId: string, openaiApiKey: string): Promise<void> {
-    console.log(`[DaytonaService] Setting up Codex authentication for sandbox ${sandboxId}`);
+  private async setupClaudeAuthentication(sandboxId: string, anthropicApiKey: string): Promise<void> {
+    console.log(`[DaytonaService] Setting up Claude Code authentication for sandbox ${sandboxId}`);
 
     // Check if already authenticated
-    if (codexAuthenticatedSandboxes.has(sandboxId)) {
-      console.log(`[DaytonaService] Codex already authenticated for sandbox ${sandboxId}`);
+    if (claudeAuthenticatedSandboxes.has(sandboxId)) {
+      console.log(`[DaytonaService] Claude Code already authenticated for sandbox ${sandboxId}`);
       return;
     }
 
     try {
-      // Run the two commands in sequence to authenticate Codex
-      console.log(`[DaytonaService] Exporting OPENAI_API_KEY and logging into Codex...`);
+      // Export the Anthropic API key
+      console.log(`[DaytonaService] Exporting ANTHROPIC_API_KEY for Claude Code...`);
 
-      const authCommand = `export OPENAI_API_KEY="${openaiApiKey}" && printenv OPENAI_API_KEY | codex login --with-api-key`;
+      const authCommand = `export ANTHROPIC_API_KEY="${anthropicApiKey}"`;
 
       const authResult = await this.executeCommand(sandboxId, authCommand);
 
       if (!authResult.success) {
-        throw new Error(`Codex authentication failed: ${authResult.error}`);
+        throw new Error(`Claude Code authentication failed: ${authResult.error}`);
       }
 
-      console.log(`[DaytonaService] Codex authentication output: ${authResult.output?.substring(0, 200)}`);
+      console.log(`[DaytonaService] Claude Code environment variable set successfully`);
 
-      // Verify Codex is working
-      console.log(`[DaytonaService] Verifying Codex installation...`);
-      const verifyResult = await this.executeCommand(sandboxId, 'codex --version');
+      // Verify Claude Code is working
+      console.log(`[DaytonaService] Verifying Claude Code installation...`);
+      const verifyResult = await this.executeCommand(sandboxId, 'claude --version');
 
       if (!verifyResult.success) {
-        console.warn(`[DaytonaService] Codex verification warning: ${verifyResult.error}`);
+        console.warn(`[DaytonaService] Claude Code verification warning: ${verifyResult.error}`);
       } else {
-        console.log(`[DaytonaService] Codex version: ${verifyResult.output}`);
+        console.log(`[DaytonaService] Claude Code version: ${verifyResult.output}`);
       }
 
       // Mark sandbox as authenticated
-      codexAuthenticatedSandboxes.add(sandboxId);
-      console.log(`[DaytonaService] Codex authentication completed successfully for sandbox ${sandboxId}`);
+      claudeAuthenticatedSandboxes.add(sandboxId);
+      console.log(`[DaytonaService] Claude Code authentication completed successfully for sandbox ${sandboxId}`);
     } catch (error) {
-      console.error(`[DaytonaService] Error setting up Codex authentication:`, error);
-      throw new Error(`Failed to authenticate Codex: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error(`[DaytonaService] Error setting up Claude Code authentication:`, error);
+      throw new Error(`Failed to authenticate Claude Code: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
-   * Run Codex on the sandbox with MongoDB documentation
+   * Run Claude Code on the sandbox with MongoDB documentation
    */
-  async runCodexOnSandbox(
+  async runClaudeCodeOnSandbox(
     sandboxId: string,
-    openaiApiKey: string,
-    prompt: string
-  ): Promise<{ success: boolean; sessionId?: string; cmdId?: string; error?: string }> {
-    console.log(`[DaytonaService] Running Codex on sandbox ${sandboxId}`);
+    anthropicApiKey: string,
+    prompt: string,
+    systemPrompt?: string,
+    existingSessionId?: string
+  ): Promise<{ success: boolean; rawOutput?: string; error?: string }> {
+    console.log(`[DaytonaService] Running Claude Code on sandbox ${sandboxId}`);
+    console.log(`[DaytonaService] Existing session ID: ${existingSessionId || 'None (new session)'}`);
 
     try {
       // Get or reconnect to the sandbox
-      const sandbox = await this.getOrReconnectSandbox(sandboxId);
+      await this.getOrReconnectSandbox(sandboxId);
 
-      // Step 1: Install Codex CLI if not already installed
-      console.log(`[DaytonaService] Installing Codex CLI...`);
+      // Step 1: Install Claude Code CLI if not already installed
+      console.log(`[DaytonaService] Installing Claude Code CLI...`);
       const installResult = await this.executeCommand(
         sandboxId,
-        'npm install -g @openai/codex || true'
+        'npm install -g @anthropic-ai/claude-code || true'
       );
 
       if (!installResult.success) {
-        console.warn(`[DaytonaService] Codex CLI installation warning: ${installResult.error}`);
+        console.warn(`[DaytonaService] Claude Code CLI installation warning: ${installResult.error}`);
       } else {
-        console.log(`[DaytonaService] Codex CLI installation output: ${installResult.output?.substring(0, 200)}`);
+        console.log(`[DaytonaService] Claude Code CLI installation output: ${installResult.output?.substring(0, 200)}`);
       }
 
-      // Step 2: Setup Codex authentication (export API key and login)
-      console.log(`[DaytonaService] Setting up Codex authentication...`);
-      await this.setupCodexAuthentication(sandboxId, openaiApiKey);
+      // Step 2: Setup Claude Code authentication
+      console.log(`[DaytonaService] Setting up Claude Code authentication...`);
+      await this.setupClaudeAuthentication(sandboxId, anthropicApiKey);
 
-      // Step 3: Create a process session for streaming
-      const sessionId = `codex-session-${Date.now()}`;
-      console.log(`[DaytonaService] Creating process session: ${sessionId}`);
-      await sandbox.process.createSession(sessionId);
+      // Step 3: Build the Claude Code command
+      console.log(`[DaytonaService] Executing Claude Code with prompt`);
 
-      // Step 4: Run Codex in JSON mode with the prompt using the session
-      // Include the API key in the environment for this specific command
-      console.log(`[DaytonaService] Executing Codex with prompt in session`);
-      const escapedPrompt = prompt.replace(/"/g, '\\"').replace(/\n/g, '\\n');
-      const codexCommand = `cd workspace && OPENAI_API_KEY="${openaiApiKey}" codex exec --json --yolo --skip-git-repo-check "${escapedPrompt}"`;
+      // Escape the prompt for command line
+      const escapedPrompt = prompt.replace(/'/g, "'\\''").replace(/\n/g, ' ');
 
-      // Execute the command asynchronously in the session
-      const commandResult = await sandbox.process.executeSessionCommand(sessionId, {
-        command: codexCommand,
-        runAsync: true,
-      });
+      // Build command parts
+      let claudeCommand = `cd workspace && ANTHROPIC_API_KEY='${anthropicApiKey}' claude -p '${escapedPrompt}' --output-format stream-json --dangerously-skip-permissions --model haiku`;
 
-      if (!commandResult.cmdId) {
-        throw new Error('Failed to get command ID from Codex execution');
+      // Add system prompt if provided
+      if (systemPrompt) {
+        const escapedSystemPrompt = systemPrompt.replace(/'/g, "'\\''").replace(/\n/g, ' ');
+        claudeCommand += ` --append-system-prompt '${escapedSystemPrompt}'`;
       }
 
-      console.log(`[DaytonaService] Codex execution initiated successfully with cmdId: ${commandResult.cmdId}`);
-      return { success: true, sessionId, cmdId: commandResult.cmdId };
+      // Add resume flag if we have an existing session
+      if (existingSessionId) {
+        claudeCommand += ` --resume ${existingSessionId}`;
+        console.log(`[DaytonaService] Resuming existing Claude session: ${existingSessionId}`);
+      }
+
+      // Execute the command and get the full output
+      console.log(`[DaytonaService] Executing Claude Code command...`);
+      const commandResult = await this.executeCommand(sandboxId, claudeCommand);
+
+      if (!commandResult.success) {
+        throw new Error(`Claude Code execution failed: ${commandResult.error}`);
+      }
+
+      console.log(`[DaytonaService] Claude Code execution completed successfully`);
+      console.log(`[DaytonaService] Output length: ${commandResult.output?.length || 0} characters`);
+
+      return { success: true, rawOutput: commandResult.output };
     } catch (error) {
-      console.error(`[DaytonaService] Error running Codex:`, error);
+      console.error(`[DaytonaService] Error running Claude Code:`, error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 
-  /**
-   * Stream logs from a sandbox session command
-   */
-  async streamSessionLogs(
-    sandboxId: string,
-    sessionId: string,
-    cmdId: string,
-    onStdout: (data: string) => void,
-    onStderr: (data: string) => void
-  ): Promise<void> {
-    console.log(`[DaytonaService] Streaming logs for session ${sessionId}, command ${cmdId}`);
-
-    try {
-      // Get or reconnect to the sandbox
-      const sandbox = await this.getOrReconnectSandbox(sandboxId);
-
-      // Stream logs with separate callbacks for stdout and stderr
-      await sandbox.process.getSessionCommandLogs(
-        sessionId,
-        cmdId,
-        (stdout: string) => {
-          console.log('[STDOUT]:', stdout);
-          onStdout(stdout);
-        },
-        (stderr: string) => {
-          console.log('[STDERR]:', stderr);
-          onStderr(stderr);
-        }
-      );
-
-      console.log(`[DaytonaService] Log streaming completed for session ${sessionId}`);
-    } catch (error) {
-      console.error(`[DaytonaService] Error streaming logs:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get logs from the sandbox (for streaming Codex output)
-   * @deprecated Use streamSessionLogs instead for better real-time streaming
-   */
-  async getSandboxLogs(sandboxId: string, logFile: string = '/tmp/codex.log'): Promise<string> {
-    console.log(`[DaytonaService] Getting logs from sandbox ${sandboxId}: ${logFile}`);
-
-    try {
-      // Get or reconnect to the sandbox
-      const sandbox = await this.getOrReconnectSandbox(sandboxId);
-
-      const response = await sandbox.process.executeCommand(`tail -n 100 ${logFile} 2>/dev/null || echo ""`);
-      return response.result || '';
-    } catch (error) {
-      console.error(`[DaytonaService] Error getting logs:`, error);
-      return '';
-    }
-  }
 }
 
 // Export singleton instance

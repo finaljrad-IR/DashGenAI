@@ -353,14 +353,14 @@ class ProjectService {
   }
 
   /**
-   * Run Codex on a project's sandbox
+   * Run Claude Code on a project's sandbox
    */
-  async runCodexOnProject(projectId: string, userId: string, customPrompt?: string): Promise<{
-    sessionId: string;
-    cmdId: string;
+  async runClaudeCodeOnProject(projectId: string, userId: string, customPrompt?: string): Promise<{
+    rawOutput: string;
+    sessionId: string | null;
   }> {
     try {
-      console.log(`[ProjectService] Running Codex on project: ${projectId}`);
+      console.log(`[ProjectService] Running Claude Code on project: ${projectId}`);
 
       // Get project
       const project = await this.getProjectById(projectId, userId);
@@ -373,15 +373,17 @@ class ProjectService {
         throw new Error('Sandbox not deployed yet');
       }
 
-      // Get OpenAI API key from environment
-      const openaiApiKey = process.env.OPENAI_API_KEY;
-      if (!openaiApiKey) {
-        throw new Error('OPENAI_API_KEY not configured on server');
+      // Get Anthropic API key from environment
+      const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+      if (!anthropicApiKey) {
+        throw new Error('ANTHROPIC_API_KEY not configured on server');
       }
 
       // Get or create database documentation
       const { getDatabaseDocumentation, analyzeDatabase, generateDashboardPrompt } = await import('./codexService.js');
       let dbDoc = await getDatabaseDocumentation(projectId);
+
+      let systemPrompt: string | undefined;
 
       if (!dbDoc) {
         console.log(`[ProjectService] No database documentation found. Analyzing database...`);
@@ -404,83 +406,48 @@ class ProjectService {
       // Generate or use custom prompt
       const prompt = customPrompt || generateDashboardPrompt(dbDoc, project.mongoConnectionString);
 
-      // Run Codex on sandbox
-      console.log(`[ProjectService] Executing Codex on sandbox: ${project.sandboxId}`);
-      const result = await daytonaService.runCodexOnSandbox(
+      // Create system prompt with database overview
+      if (dbDoc) {
+        systemPrompt = `Database Overview: ${JSON.stringify(dbDoc.summary || {})}`;
+      }
+
+      // Run Claude Code on sandbox
+      console.log(`[ProjectService] Executing Claude Code on sandbox: ${project.sandboxId}`);
+      console.log(`[ProjectService] Using existing session ID: ${project.claudeSessionId || 'None (new session)'}`);
+
+      const result = await daytonaService.runClaudeCodeOnSandbox(
         project.sandboxId,
-        openaiApiKey,
-        prompt
+        anthropicApiKey,
+        prompt,
+        systemPrompt,
+        project.claudeSessionId || undefined
       );
 
-      if (!result.success || !result.sessionId || !result.cmdId) {
-        throw new Error(result.error || 'Failed to run Codex');
+      if (!result.success || !result.rawOutput) {
+        throw new Error(result.error || 'Failed to run Claude Code');
       }
 
-      console.log(`[ProjectService] Codex execution started successfully with session ${result.sessionId}`);
-      return { sessionId: result.sessionId, cmdId: result.cmdId };
-    } catch (error) {
-      console.error(`[ProjectService] Error running Codex: ${error.message}`, error);
-      throw new Error(`Failed to run Codex: ${error.message}`);
-    }
-  }
+      // Parse the output to extract session ID
+      let newSessionId: string | null = null;
+      try {
+        const jsonOutput = JSON.parse(result.rawOutput);
+        if (jsonOutput.session_id) {
+          newSessionId = jsonOutput.session_id;
+          console.log(`[ProjectService] New session ID from Claude Code: ${newSessionId}`);
 
-  /**
-   * Stream project logs from sandbox using session-based streaming
-   */
-  async streamProjectLogs(
-    projectId: string,
-    userId: string,
-    sessionId: string,
-    cmdId: string,
-    onData: (data: { type: string; data: unknown }) => void,
-    onError: (error: Error) => void
-  ): Promise<void> {
-    try {
-      console.log(`[ProjectService] Starting log stream for project: ${projectId}, session: ${sessionId}, cmdId: ${cmdId}`);
-
-      // Get project
-      const project = await this.getProjectById(projectId, userId);
-      if (!project) {
-        throw new Error('Project not found');
-      }
-
-      // Check if sandbox is deployed
-      if (!project.sandboxId) {
-        throw new Error('Sandbox not deployed yet');
-      }
-
-      // Stream logs using Daytona session-based streaming
-      await daytonaService.streamSessionLogs(
-        project.sandboxId,
-        sessionId,
-        cmdId,
-        (stdout: string) => {
-          // Process stdout
-          const lines = stdout.split('\n').filter((line) => line.trim());
-          for (const line of lines) {
-            // Try to parse as JSON for Codex output
-            try {
-              const jsonLog = JSON.parse(line);
-              onData({ type: 'json', data: jsonLog });
-            } catch {
-              // Send as plain text
-              onData({ type: 'text', data: line });
-            }
-          }
-        },
-        (stderr: string) => {
-          // Process stderr
-          const lines = stderr.split('\n').filter((line) => line.trim());
-          for (const line of lines) {
-            onData({ type: 'error', data: line });
-          }
+          // Update project with new session ID
+          project.claudeSessionId = newSessionId;
+          await project.save();
         }
-      );
+      } catch (parseError) {
+        console.warn(`[ProjectService] Failed to parse Claude Code output for session ID:`, parseError);
+      }
 
-      console.log(`[ProjectService] Log streaming completed for project: ${projectId}`);
+      console.log(`[ProjectService] Claude Code execution completed successfully`);
+      return { rawOutput: result.rawOutput, sessionId: newSessionId };
     } catch (error) {
-      console.error(`[ProjectService] Error streaming logs: ${error.message}`, error);
-      onError(error as Error);
+      console.error(`[ProjectService] Error running Claude Code: ${error.message}`, error);
+      throw new Error(`Failed to run Claude Code: ${error.message}`);
     }
   }
 

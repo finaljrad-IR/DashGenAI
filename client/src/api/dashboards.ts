@@ -120,35 +120,29 @@ export const updateDashboard = (id: string, data: { name: string }) => {
   // }
 };
 
-// Description: Send chat message to modify dashboard
-// Endpoint: POST /api/dashboards/:id/chat
-// Request: { message: string }
-// Response: { success: boolean, reply: string, status: string, dashboardUpdated?: boolean }
-export const sendChatMessage = (id: string, message: string) => {
-  // Mocking the response
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const responses = [
-        'Analyzing your request...',
-        'Modifying the dashboard components...',
-        'Testing changes...',
-        'Changes applied! Your dashboard has been updated.'
-      ];
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-      resolve({
-        success: true,
-        reply: randomResponse,
-        status: 'completed',
-        dashboardUpdated: true
-      });
-    }, 1500);
-  });
-  // Uncomment the below lines to make an actual API call
-  // try {
-  //   return await api.post(`/api/dashboards/${id}/chat`, { message });
-  // } catch (error) {
-  //   throw new Error(error?.response?.data?.message || error.message);
-  // }
+// Description: Send chat message to modify dashboard using Claude Code
+// Endpoint: POST /api/projects/:id/run-claude
+// Request: { prompt: string }
+// Response: { success: boolean, message: string, rawOutput: string, sessionId: string | null }
+export const sendChatMessage = async (id: string, message: string) => {
+  try {
+    console.log('[sendChatMessage] Sending message to Claude Code:', message);
+    const response = await api.post(`/api/projects/${id}/run-claude`, {
+      prompt: message
+    });
+    console.log('[sendChatMessage] Claude Code response received:', response.data);
+    return {
+      success: response.data.success,
+      reply: response.data.message,
+      rawOutput: response.data.rawOutput,
+      sessionId: response.data.sessionId,
+      status: 'completed',
+      dashboardUpdated: true
+    };
+  } catch (error) {
+    console.error('[sendChatMessage] Error sending message:', error);
+    throw new Error(error?.response?.data?.error || error.message);
+  }
 };
 
 // Description: Get chat history for dashboard

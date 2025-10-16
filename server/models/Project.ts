@@ -12,6 +12,7 @@ export interface IProject extends Document {
   sandboxId?: string;
   sandboxUrl?: string;
   sandboxStatus?: 'creating' | 'running' | 'stopped' | 'failed';
+  claudeSessionId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -62,6 +63,10 @@ const projectSchema = new Schema<IProject>(
     sandboxStatus: {
       type: String,
       enum: ['creating', 'running', 'stopped', 'failed'],
+    },
+    claudeSessionId: {
+      type: String,
+      trim: true,
     },
   },
   {

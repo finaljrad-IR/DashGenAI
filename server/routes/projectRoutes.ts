@@ -258,110 +258,48 @@ router.post('/:id/sandbox/deploy', requireUser(), async (req: Request, res: Resp
   }
 });
 
-// Description: Run Codex on project sandbox to implement dashboard
-// Endpoint: POST /api/projects/:id/run-codex
+// Description: Run Claude Code on project sandbox to implement dashboard
+// Endpoint: POST /api/projects/:id/run-claude
 // Request: { prompt?: string }
-// Response: { success: boolean, message: string, sessionId: string, cmdId: string }
-router.post('/:id/run-codex', requireUser(), async (req: Request, res: Response) => {
+// Response: { success: boolean, message: string, rawOutput: string, sessionId: string | null }
+router.post('/:id/run-claude', requireUser(), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { prompt } = req.body;
 
-    console.log(`[POST /api/projects/:id/run-codex] Running Codex on project ${id}`);
+    console.log(`[POST /api/projects/:id/run-claude] Running Claude Code on project ${id}`);
 
     // Get project
     const project = await ProjectService.getProjectById(id, req.user._id.toString());
     if (!project) {
-      console.warn(`[POST /api/projects/:id/run-codex] Project not found: ${id}`);
+      console.warn(`[POST /api/projects/:id/run-claude] Project not found: ${id}`);
       return res.status(404).json({ error: 'Project not found' });
     }
 
     // Check if sandbox is deployed
     if (!project.sandboxId) {
-      console.warn(`[POST /api/projects/:id/run-codex] Sandbox not deployed for project: ${id}`);
+      console.warn(`[POST /api/projects/:id/run-claude] Sandbox not deployed for project: ${id}`);
       return res.status(400).json({ error: 'Sandbox not deployed yet' });
     }
 
-    // Run Codex and get session info
-    const { sessionId, cmdId } = await ProjectService.runCodexOnProject(id, req.user._id.toString(), prompt);
+    // Run Claude Code and get output
+    const { rawOutput, sessionId } = await ProjectService.runClaudeCodeOnProject(id, req.user._id.toString(), prompt);
 
-    console.log(`[POST /api/projects/:id/run-codex] Codex execution started successfully with session ${sessionId}`);
+    console.log(`[POST /api/projects/:id/run-claude] Claude Code execution completed successfully`);
+    console.log(`[POST /api/projects/:id/run-claude] Session ID: ${sessionId || 'Not found in output'}`);
+
     res.status(200).json({
       success: true,
-      message: 'Codex execution started. Check logs for progress.',
+      message: 'Claude Code execution completed.',
+      rawOutput,
       sessionId,
-      cmdId,
     });
   } catch (error) {
-    console.error(`[POST /api/projects/:id/run-codex] Error running Codex:`, error);
-    res.status(500).json({ error: error.message || 'Failed to run Codex' });
+    console.error(`[POST /api/projects/:id/run-claude] Error running Claude Code:`, error);
+    res.status(500).json({ error: error.message || 'Failed to run Claude Code' });
   }
 });
 
-// Description: Stream logs from project sandbox
-// Endpoint: GET /api/projects/:id/logs
-// Request: { sessionId: string, cmdId: string } (query parameters)
-// Response: Server-Sent Events (SSE) stream of logs
-router.get('/:id/logs', requireUser(), async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { sessionId, cmdId } = req.query;
-
-    console.log(`[GET /api/projects/:id/logs] Streaming logs for project ${id}, session: ${sessionId}, cmd: ${cmdId}`);
-
-    // Validate required parameters
-    if (!sessionId || !cmdId) {
-      console.warn(`[GET /api/projects/:id/logs] Missing sessionId or cmdId`);
-      return res.status(400).json({ error: 'sessionId and cmdId are required query parameters' });
-    }
-
-    // Get project
-    const project = await ProjectService.getProjectById(id, req.user._id.toString());
-    if (!project) {
-      console.warn(`[GET /api/projects/:id/logs] Project not found: ${id}`);
-      return res.status(404).json({ error: 'Project not found' });
-    }
-
-    // Check if sandbox is deployed
-    if (!project.sandboxId) {
-      console.warn(`[GET /api/projects/:id/logs] Sandbox not deployed for project: ${id}`);
-      return res.status(400).json({ error: 'Sandbox not deployed yet' });
-    }
-
-    // Set up SSE
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
-
-    console.log(`[GET /api/projects/:id/logs] SSE connection established`);
-
-    // Stream logs
-    await ProjectService.streamProjectLogs(
-      id,
-      req.user._id.toString(),
-      sessionId as string,
-      cmdId as string,
-      (logData) => {
-        // Send data as SSE
-        res.write(`data: ${JSON.stringify(logData)}\n\n`);
-      },
-      (error) => {
-        // Send error and close
-        console.error(`[GET /api/projects/:id/logs] Error in log stream:`, error);
-        res.write(`data: ${JSON.stringify({ type: 'error', data: error.message })}\n\n`);
-        res.end();
-      }
-    );
-
-    console.log(`[GET /api/projects/:id/logs] Log stream ended`);
-  } catch (error) {
-    console.error('[GET /api/projects/:id/logs] Error streaming logs:', error);
-    if (!res.headersSent) {
-      res.status(500).json({ error: error.message || 'Failed to stream logs' });
-    }
-  }
-});
 
 // Description: Save a Codex message for a project
 // Endpoint: POST /api/projects/:id/codex-messages
