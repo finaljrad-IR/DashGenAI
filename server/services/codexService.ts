@@ -459,18 +459,25 @@ ${collectionsInfo}
 CONNECTION URI:
 ${databaseUri}
 
+IMPORTANT - Database Configuration:
+Before implementing any backend functionality, you MUST add the MongoDB connection URI to the server/.env file:
+1. Add this line to server/.env: MONGODB_URI=${databaseUri}
+2. This URI should be used by the backend to connect to the user's MongoDB database
+3. The backend should read this from process.env.MONGODB_URI
+
 TASK:
 Implement a simple dashboard for fetching and displaying users from the database.
 
 Requirements:
-1. Create a backend API endpoint to fetch users from the database
-2. Create a frontend component to display the users in a table
-3. Add proper error handling and loading states
-4. Use the provided MongoDB URI to connect to the database
-5. Follow the existing project structure and patterns
-6. Make sure the implementation is clean, readable, and production-ready
+1. FIRST: Add MONGODB_URI=${databaseUri} to the server/.env file
+2. Create a backend API endpoint to fetch users from the database using the MONGODB_URI from server/.env
+3. Create a frontend component to display the users in a table
+4. Add proper error handling and loading states
+5. The backend MUST use the MongoDB URI from the server/.env file (process.env.MONGODB_URI)
+6. Follow the existing project structure and patterns
+7. Make sure the implementation is clean, readable, and production-ready
 
-Please implement this functionality step by step.`;
+Please implement this functionality step by step, starting with adding the MONGODB_URI to server/.env.`;
 
   console.log(`[CodexService] Prompt generated successfully`);
   return prompt;

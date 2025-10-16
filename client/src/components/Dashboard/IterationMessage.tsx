@@ -112,70 +112,74 @@ export function IterationMessage({ message }: IterationMessageProps) {
 
       {/* Message Content */}
       <div className="flex flex-col gap-1 max-w-[80%]">
-        <Card className={cn(
-          "p-3 bg-card border transition-all duration-300",
-          isError && "border-red-300 dark:border-red-700"
-        )}>
-          {/* Show loading state with colored action indicator */}
-          {!isCompleted && (
-            <div className="space-y-3">
-              {/* Action type with icon and color */}
-              <div className={cn(
-                "inline-flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all duration-500",
-                actionStyle.bgColor,
-                actionStyle.borderColor,
-                "animate-in slide-in-from-top-2"
-              )}>
-                <span className={cn("transition-all duration-300", actionStyle.color)}>
-                  {actionStyle.icon}
-                </span>
-                <span className={cn("text-sm font-medium", actionStyle.color)}>
-                  {message.currentAction}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Show completion state */}
-          {isCompleted && (
-            <div className="space-y-3">
-              {/* Final agent message without title */}
-              <div className="text-sm whitespace-pre-wrap animate-in fade-in slide-in-from-top-2 duration-500">
+        {/* Show loading state with colored action indicator - no outer border */}
+        {!isCompleted && (
+          <div className="space-y-3">
+            {/* Action type with icon and color */}
+            <div className={cn(
+              "inline-flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all duration-500",
+              actionStyle.bgColor,
+              actionStyle.borderColor,
+              "animate-in slide-in-from-top-2"
+            )}>
+              <span className={cn("transition-all duration-300", actionStyle.color)}>
+                {actionStyle.icon}
+              </span>
+              <span className={cn("text-sm font-medium", actionStyle.color)}>
                 {message.currentAction}
-              </div>
+              </span>
+            </div>
+          </div>
+        )}
 
-              {/* Collapsible "Iteration completed" section */}
-              {message.resultDescription && (
-                <div className="border-t pt-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                  <div
-                    className="flex items-center gap-2 cursor-pointer hover:bg-secondary/50 p-2 rounded -mx-2 transition-colors"
-                    onClick={() => setIsExpanded(!isExpanded)}
-                  >
-                    {isExpanded ? (
-                      <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform duration-200" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform duration-200" />
+        {/* Show completion state */}
+        {isCompleted && (
+          <div className="space-y-3">
+            {/* Collapsible "Iteration completed" section */}
+            {message.resultDescription && (
+              <Card className={cn(
+                "p-3 bg-card border transition-all duration-300",
+                isError && "border-red-300 dark:border-red-700"
+              )}>
+                <div
+                  className="flex items-center gap-2 cursor-pointer hover:bg-secondary/50 p-2 rounded -mx-2 transition-colors"
+                  onClick={() => setIsExpanded(!isExpanded)}
+                >
+                  {isExpanded ? (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform duration-200" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform duration-200" />
+                  )}
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {isError ? 'Error details' : 'Iteration completed'}
+                  </span>
+                </div>
+
+                {/* Final agent message and result - only shown when expanded */}
+                {isExpanded && (
+                  <div className="mt-3 space-y-3 border-t pt-3">
+                    {/* Final agent message */}
+                    {message.currentAction && (
+                      <div className="text-sm whitespace-pre-wrap animate-in fade-in slide-in-from-top-2 duration-300">
+                        {message.currentAction}
+                      </div>
                     )}
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {isError ? 'Error details' : 'Iteration completed'}
-                    </span>
-                  </div>
 
-                  {isExpanded && (
+                    {/* Result description */}
                     <div className={cn(
-                      "mt-2 text-xs break-words whitespace-pre-wrap font-mono p-3 rounded border animate-in fade-in slide-in-from-top-2 duration-300",
+                      "text-xs break-words whitespace-pre-wrap font-mono p-3 rounded border animate-in fade-in slide-in-from-top-2 duration-300",
                       isError
                         ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800 text-red-900 dark:text-red-100"
                         : "bg-muted/50 border-border text-muted-foreground"
                     )}>
                       {message.resultDescription}
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </Card>
+                  </div>
+                )}
+              </Card>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
