@@ -42,13 +42,14 @@ export interface ClaudeCodeOutput {
     content?: Array<{
       text?: string;
       type?: string;
+      name?: string;
     }>;
   };
 }
 
 export interface ParsedClaudeMessage {
   id: string;
-  messageType: 'result' | 'error' | 'raw' | 'assistant' | 'system';
+  messageType: 'result' | 'error' | 'raw' | 'assistant' | 'system' | 'tool';
   title: string;
   description?: string;
   icon?: string;
@@ -57,6 +58,19 @@ export interface ParsedClaudeMessage {
   rawData?: ClaudeCodeOutput;
   shouldIgnore?: boolean;
 }
+
+// Tool name to user-friendly message mapping
+const TOOL_MESSAGES: Record<string, string> = {
+  'edit': 'Editing files',
+  'write': 'Writing files',
+  'read': 'Reading files',
+  'websearch': 'Searching web',
+  'bash': 'Running a command',
+  'ls': 'Running a command',
+  'multiedit': 'Running a command',
+  'killbash': 'Stopping a command',
+  'bashoutput': 'Getting the command run output',
+};
 
 /**
  * Parse Claude Code JSON output into structured messages
@@ -73,6 +87,19 @@ export function parseClaudeOutput(output: string): ParsedClaudeMessage[] {
       // Try to parse as JSON
       const data: ClaudeCodeOutput = JSON.parse(line);
 
+      // Rule 0: Ignore messages with type "status"
+      if (data.type === 'status') {
+        messages.push({
+          id: data.uuid || `status-${Date.now()}-${Math.random()}`,
+          messageType: 'system',
+          title: 'Status Message',
+          timestamp: Date.now(),
+          shouldIgnore: true,
+          rawData: data,
+        });
+        continue;
+      }
+
       // Rule 1: Ignore messages with type "system"
       if (data.type === 'system') {
         messages.push({
@@ -88,6 +115,47 @@ export function parseClaudeOutput(output: string): ParsedClaudeMessage[] {
 
       // Rule 2: Handle messages with type "assistant"
       if (data.type === 'assistant') {
+        // Check if this is a tool usage message
+        const contentItems = data.message?.content || [];
+        const hasTools = contentItems.some(item => item.name);
+
+        if (hasTools) {
+          // Parse tool usage - there can be many tools
+          for (const contentItem of contentItems) {
+            if (contentItem.name) {
+              const toolName = contentItem.name;
+              const friendlyMessage = TOOL_MESSAGES[toolName];
+
+              if (friendlyMessage) {
+                // Known tool - create user-friendly message
+                messages.push({
+                  id: `${data.uuid || Date.now()}-tool-${toolName}-${Math.random()}`,
+                  messageType: 'tool',
+                  title: friendlyMessage,
+                  icon: '🔧',
+                  timestamp: Date.now(),
+                  status: 'in_progress',
+                  rawData: data,
+                });
+              } else {
+                // Unknown tool - show entire JSON
+                messages.push({
+                  id: `${data.uuid || Date.now()}-tool-unknown-${Math.random()}`,
+                  messageType: 'raw',
+                  title: 'Unknown Tool Usage',
+                  description: JSON.stringify(data, null, 2),
+                  icon: '⚠️',
+                  timestamp: Date.now(),
+                  status: 'completed',
+                  rawData: data,
+                });
+              }
+            }
+          }
+          continue;
+        }
+
+        // Regular assistant message (text content)
         const textContent = data.message?.content?.[0]?.text || 'Agent message';
         messages.push({
           id: data.uuid || `assistant-${Date.now()}-${Math.random()}`,

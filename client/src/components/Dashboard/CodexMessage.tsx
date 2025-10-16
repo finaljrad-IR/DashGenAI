@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Brain, Terminal, Bot, CheckCircle2, ChevronDown, ChevronRight, AlertCircle } from "lucide-react";
+import { Brain, Terminal, Bot, CheckCircle2, ChevronDown, ChevronRight, AlertCircle, Wrench } from "lucide-react";
 import { ParsedClaudeMessage } from "@/utils/codexLogParser";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +34,8 @@ export function CodexMessage({ message }: CodexMessageProps) {
         return <Brain className="h-4 w-4 text-blue-500" />;
       case 'command_execution':
         return <Terminal className="h-4 w-4 text-purple-500" />;
+      case 'tool':
+        return <Wrench className="h-4 w-4 text-orange-500" />;
       default:
         return <Bot className="h-4 w-4 text-gray-500" />;
     }
@@ -52,6 +54,8 @@ export function CodexMessage({ message }: CodexMessageProps) {
         return 'bg-blue-50 dark:bg-blue-950/20';
       case 'command_execution':
         return 'bg-purple-50 dark:bg-purple-950/20';
+      case 'tool':
+        return 'bg-orange-50 dark:bg-orange-950/20';
       default:
         return 'bg-gray-50 dark:bg-gray-900/20';
     }
@@ -70,6 +74,8 @@ export function CodexMessage({ message }: CodexMessageProps) {
         return 'border-blue-200 dark:border-blue-800';
       case 'command_execution':
         return 'border-purple-200 dark:border-purple-800';
+      case 'tool':
+        return 'border-orange-200 dark:border-orange-800';
       default:
         return 'border-gray-200 dark:border-gray-800';
     }
