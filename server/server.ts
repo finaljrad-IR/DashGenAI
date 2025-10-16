@@ -47,14 +47,14 @@ app.use('/api/codex', codexRoutes);
 
 // If no routes handled the request, it's a 404
 app.use((req: Request, res: Response) => {
-  res.status(404).send("Page not found.");
+  res.status(404).json({ error: "Page not found." });
 });
 
 // Error handling
 app.use((err: Error, req: Request, res: Response) => {
   console.error(`Unhandled application error: ${err.message}`);
   console.error(err.stack);
-  res.status(500).send("There was an error serving your request.");
+  res.status(500).json({ error: "There was an error serving your request." });
 });
 
 app.listen(port, () => {
