@@ -27,7 +27,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
   const [inputMessage, setInputMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [claudeResponse, setClaudeResponse] = useState<ParsedClaudeMessage | null>(null);
+  const [claudeResponses, setClaudeResponses] = useState<ParsedClaudeMessage[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -57,7 +57,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, claudeResponse]);
+  }, [messages, claudeResponses]);
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
@@ -79,18 +79,18 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
     setMessages(prev => [...prev, userMessage])
     setInputMessage('')
     setIsSending(true)
-    setClaudeResponse(null) // Clear previous Claude response
+    setClaudeResponses([]) // Clear previous Claude responses
 
     try {
       console.log('[ChatInterface] Sending message to Claude Code:', inputMessage)
       const response = await sendChatMessage(dashboardId, inputMessage)
       console.log('[ChatInterface] Received response:', response)
 
-      // Parse Claude Code raw output
+      // Parse Claude Code raw output (now returns array of messages)
       if (response.rawOutput) {
-        const parsedResponse = parseClaudeOutput(response.rawOutput)
-        setClaudeResponse(parsedResponse)
-        console.log('[ChatInterface] Parsed Claude response:', parsedResponse)
+        const parsedResponses = parseClaudeOutput(response.rawOutput)
+        setClaudeResponses(parsedResponses)
+        console.log('[ChatInterface] Parsed Claude responses:', parsedResponses)
       }
 
       // Add system reply message
@@ -196,10 +196,16 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
               </div>
             )}
 
-            {/* Claude Code Response */}
-            {claudeResponse && !claudeResponse.shouldIgnore && (
-              <div className="mt-4 animate-in fade-in slide-in-from-bottom-2">
-                <CodexMessage message={claudeResponse} />
+            {/* Claude Code Responses */}
+            {claudeResponses.length > 0 && (
+              <div className="mt-4 space-y-3">
+                {claudeResponses.map((response) => (
+                  !response.shouldIgnore && (
+                    <div key={response.id} className="animate-in fade-in slide-in-from-bottom-2">
+                      <CodexMessage message={response} />
+                    </div>
+                  )
+                ))}
               </div>
             )}
           </div>
