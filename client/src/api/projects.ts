@@ -267,3 +267,81 @@ export const deleteCodexMessages = async (projectId: string): Promise<{ message:
     throw new Error(err?.response?.data?.error || err?.message || 'Failed to delete Codex messages');
   }
 };
+
+export interface ChatMessage {
+  _id: string;
+  projectId: string;
+  messageType: 'user' | 'iteration_completed' | 'system';
+  content: string;
+  metadata?: {
+    sessionId?: string;
+    resultDescription?: string;
+    currentAction?: string;
+    icon?: string;
+    hasCompleted?: boolean;
+    [key: string]: unknown;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SaveChatMessageInput {
+  messageType: 'user' | 'iteration_completed' | 'system';
+  content: string;
+  metadata?: {
+    sessionId?: string;
+    resultDescription?: string;
+    currentAction?: string;
+    icon?: string;
+    hasCompleted?: boolean;
+    [key: string]: unknown;
+  };
+}
+
+// Description: Save a chat message for a project
+// Endpoint: POST /api/projects/:id/chat-messages
+// Request: { messageType: 'user' | 'iteration_completed' | 'system', content: string, metadata?: object }
+// Response: { message: ChatMessage }
+export const saveChatMessage = async (
+  projectId: string,
+  data: SaveChatMessageInput
+): Promise<ChatMessage> => {
+  try {
+    const response = await api.post(`/api/projects/${projectId}/chat-messages`, data);
+    return response.data.message;
+  } catch (error: unknown) {
+    console.error('Error saving chat message:', error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to save chat message');
+  }
+};
+
+// Description: Get all chat messages for a project
+// Endpoint: GET /api/projects/:id/chat-messages
+// Request: {}
+// Response: { messages: Array<ChatMessage> }
+export const getChatMessages = async (projectId: string): Promise<ChatMessage[]> => {
+  try {
+    const response = await api.get(`/api/projects/${projectId}/chat-messages`);
+    return response.data.messages;
+  } catch (error: unknown) {
+    console.error('Error fetching chat messages:', error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch chat messages');
+  }
+};
+
+// Description: Delete all chat messages for a project
+// Endpoint: DELETE /api/projects/:id/chat-messages
+// Request: {}
+// Response: { message: string, deletedCount: number }
+export const deleteChatMessages = async (projectId: string): Promise<{ message: string; deletedCount: number }> => {
+  try {
+    const response = await api.delete(`/api/projects/${projectId}/chat-messages`);
+    return response.data;
+  } catch (error: unknown) {
+    console.error('Error deleting chat messages:', error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to delete chat messages');
+  }
+};

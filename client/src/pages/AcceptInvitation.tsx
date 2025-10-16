@@ -33,20 +33,6 @@ export function AcceptInvitation() {
 
   const password = watch('password');
 
-  useEffect(() => {
-    if (token) {
-      loadInvitationDetails();
-    }
-  }, [token]);
-
-  useEffect(() => {
-    if (password) {
-      calculatePasswordStrength(password);
-    } else {
-      setPasswordStrength(0);
-    }
-  }, [password]);
-
   const loadInvitationDetails = useCallback(async () => {
     if (!token) return
 
@@ -64,7 +50,21 @@ export function AcceptInvitation() {
     } finally {
       setIsLoading(false)
     }
-  }, [token, toast])
+  }, [token, toast]);
+
+  useEffect(() => {
+    if (token) {
+      loadInvitationDetails();
+    }
+  }, [token, loadInvitationDetails]);
+
+  useEffect(() => {
+    if (password) {
+      calculatePasswordStrength(password);
+    } else {
+      setPasswordStrength(0);
+    }
+  }, [password]);
 
   const calculatePasswordStrength = (pwd: string) => {
     let strength = 0;

@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
-import { sendChatMessageStreaming, getChatHistory } from '@/api/dashboards';
+import { sendChatMessageStreaming } from '@/api/dashboards';
+import { getChatMessages, saveChatMessage, type ChatMessage as PersistedChatMessage } from '@/api/projects';
 import { useToast } from '@/hooks/useToast';
 import { parseClaudeOutput, ParsedClaudeMessage } from '@/utils/codexLogParser';
 import { IterationMessage } from './IterationMessage';
@@ -28,64 +29,111 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [currentIteration, setCurrentIteration] = useState<ParsedClaudeMessage | null>(null);
+  const [completedIterations, setCompletedIterations] = useState<ParsedClaudeMessage[]>([]);
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   const loadChatHistory = useCallback(async () => {
+    if (!projectId) {
+      console.log('[ChatInterface] No projectId provided, skipping chat history load');
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const response = await getChatHistory(dashboardId)
-      if (response.messages) {
-        // Only set user messages - no system messages
-        const userMessages = response.messages.filter((msg: Message) => msg.role === 'user');
-        setMessages(userMessages);
-      }
+      console.log('[ChatInterface] Loading chat messages for project:', projectId);
+      const chatMessages = await getChatMessages(projectId);
+
+      console.log('[ChatInterface] Loaded chat messages:', chatMessages.length);
+
+      // Convert persisted messages to display format
+      const userMessages: Message[] = [];
+      const iterationMessages: ParsedClaudeMessage[] = [];
+
+      chatMessages.forEach((msg: PersistedChatMessage) => {
+        if (msg.messageType === 'user') {
+          userMessages.push({
+            _id: msg._id,
+            role: 'user',
+            content: msg.content,
+            timestamp: msg.createdAt,
+          });
+        } else if (msg.messageType === 'iteration_completed' && msg.metadata) {
+          // Reconstruct the iteration message from metadata
+          iterationMessages.push({
+            currentAction: msg.metadata.currentAction || msg.content,
+            resultDescription: msg.metadata.resultDescription || '',
+            icon: msg.metadata.icon || '✅',
+            hasCompleted: true,
+          });
+        }
+      });
+
+      setMessages(userMessages);
+      setCompletedIterations(iterationMessages);
+      console.log('[ChatInterface] Loaded', userMessages.length, 'user messages and', iterationMessages.length, 'iteration messages');
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load chat history'
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load chat history';
       console.error('[ChatInterface] Error loading chat history:', errorMessage);
       toast({
         title: "Error",
         description: errorMessage,
         variant: "destructive",
-      })
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [dashboardId, toast])
+  }, [projectId, toast]);
 
   useEffect(() => {
     loadChatHistory();
-  }, [dashboardId, loadChatHistory]);
+  }, [projectId, loadChatHistory]);
 
   // Auto-scroll to bottom when messages or iteration updates
   useEffect(() => {
     if (scrollViewportRef.current) {
       scrollViewportRef.current.scrollTop = scrollViewportRef.current.scrollHeight;
     }
-  }, [messages, currentIteration]);
+  }, [messages, currentIteration, completedIterations]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputMessage.trim() || isSending) return
+    if (!inputMessage.trim() || isSending) return;
 
     const userMessage = {
       _id: Date.now().toString(),
       role: 'user' as const,
       content: inputMessage,
       timestamp: new Date().toISOString(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    const messageToSend = inputMessage;
+    setInputMessage('');
+    setIsSending(true);
+    setCurrentIteration(null); // Clear previous iteration
+
+    // Save user message to database if projectId is available
+    if (projectId) {
+      try {
+        console.log('[ChatInterface] Saving user message to database');
+        await saveChatMessage(projectId, {
+          messageType: 'user',
+          content: messageToSend,
+        });
+        console.log('[ChatInterface] User message saved successfully');
+      } catch (error) {
+        console.error('[ChatInterface] Error saving user message:', error);
+        // Don't show error toast, just log it - message is already in UI
+      }
     }
 
-    setMessages(prev => [...prev, userMessage])
-    const messageToSend = inputMessage
-    setInputMessage('')
-    setIsSending(true)
-    setCurrentIteration(null) // Clear previous iteration
-
     // Store raw output for parsing
-    let rawOutput = ''
+    let rawOutput = '';
 
     try {
-      console.log('[ChatInterface] Starting streaming request to Claude Code:', messageToSend)
+      console.log('[ChatInterface] Starting streaming request to Claude Code:', messageToSend);
 
       // Use streaming API for real-time updates
       const cleanup = sendChatMessageStreaming(
@@ -93,57 +141,84 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
         messageToSend,
         // onChunk callback - handle each chunk as it arrives
         (data) => {
-          console.log('[ChatInterface] Received chunk:', data)
+          console.log('[ChatInterface] Received chunk:', data);
 
           // Accumulate raw output
-          const chunkStr = JSON.stringify(data)
-          rawOutput += chunkStr + '\n'
+          const chunkStr = JSON.stringify(data);
+          rawOutput += chunkStr + '\n';
 
           // Parse and update the single iteration message in real-time
-          const parsedResponses = parseClaudeOutput(rawOutput)
+          const parsedResponses = parseClaudeOutput(rawOutput);
           if (parsedResponses.length > 0) {
             // Always take the last (most recent) iteration message
-            setCurrentIteration(parsedResponses[parsedResponses.length - 1])
+            setCurrentIteration(parsedResponses[parsedResponses.length - 1]);
           }
-          console.log('[ChatInterface] Updated iteration message')
+          console.log('[ChatInterface] Updated iteration message');
         },
         // onComplete callback
-        (sessionId) => {
-          console.log('[ChatInterface] Stream completed, session ID:', sessionId)
-          setIsSending(false)
+        async (sessionId) => {
+          console.log('[ChatInterface] Stream completed, session ID:', sessionId);
+
+          // Save the completed iteration message to database if we have one and projectId
+          if (currentIteration && projectId) {
+            try {
+              console.log('[ChatInterface] Saving completed iteration message to database');
+              await saveChatMessage(projectId, {
+                messageType: 'iteration_completed',
+                content: currentIteration.currentAction || 'Iteration completed',
+                metadata: {
+                  sessionId,
+                  resultDescription: currentIteration.resultDescription,
+                  currentAction: currentIteration.currentAction,
+                  icon: currentIteration.icon,
+                  hasCompleted: true,
+                },
+              });
+              console.log('[ChatInterface] Iteration message saved successfully');
+
+              // Move current iteration to completed list
+              setCompletedIterations(prev => [...prev, currentIteration]);
+              setCurrentIteration(null);
+            } catch (error) {
+              console.error('[ChatInterface] Error saving iteration message:', error);
+              // Don't show error toast, just log it
+            }
+          }
+
+          setIsSending(false);
 
           // Trigger dashboard refresh
           if (onDashboardUpdate) {
-            onDashboardUpdate()
+            onDashboardUpdate();
             toast({
               title: "Dashboard Updated",
               description: "Your dashboard has been updated successfully.",
-            })
+            });
           }
         },
         // onError callback
         (error) => {
-          console.error('[ChatInterface] Stream error:', error)
-          setIsSending(false)
+          console.error('[ChatInterface] Stream error:', error);
+          setIsSending(false);
           toast({
             title: "Error",
             description: error.message || 'Failed to send message',
             variant: "destructive",
-          })
+          });
         }
-      )
+      );
 
       // Store cleanup function (not needed for now, but could be useful for cancellation)
       // If component unmounts, this won't be called automatically
     } catch (error: unknown) {
-      console.error('[ChatInterface] Error setting up stream:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Failed to send message'
+      console.error('[ChatInterface] Error setting up stream:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
       toast({
         title: "Error",
         description: errorMessage,
         variant: "destructive",
-      })
-      setIsSending(false)
+      });
+      setIsSending(false);
     }
   };
 
@@ -170,24 +245,31 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
             </div>
           ) : (
             <div className="space-y-4">
-              {/* User Messages */}
-              {messages.map((message) => (
-                <div
-                  key={message._id}
-                  className="flex gap-3 flex-row-reverse animate-in fade-in slide-in-from-bottom-2"
-                >
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
-                    <User className="h-4 w-4 text-white" />
+              {/* Interleave user messages and completed iterations in chronological order */}
+              {messages.map((message, idx) => (
+                <div key={`message-group-${idx}`}>
+                  {/* User Message */}
+                  <div className="flex gap-3 flex-row-reverse animate-in fade-in slide-in-from-bottom-2">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
+                      <User className="h-4 w-4 text-white" />
+                    </div>
+
+                    <div className="flex flex-col gap-1 max-w-[80%] items-end">
+                      <Card className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 text-white border-0">
+                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      </Card>
+                      <span className="text-xs text-muted-foreground px-1">
+                        {formatTime(message.timestamp)}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="flex flex-col gap-1 max-w-[80%] items-end">
-                    <Card className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 text-white border-0">
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                    </Card>
-                    <span className="text-xs text-muted-foreground px-1">
-                      {formatTime(message.timestamp)}
-                    </span>
-                  </div>
+                  {/* Show completed iteration after user message if exists */}
+                  {completedIterations[idx] && (
+                    <div className="mt-4">
+                      <IterationMessage message={completedIterations[idx]} />
+                    </div>
+                  )}
                 </div>
               ))}
 

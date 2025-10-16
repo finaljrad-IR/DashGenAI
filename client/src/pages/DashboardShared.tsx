@@ -15,12 +15,6 @@ export function DashboardShared() {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (id) {
-      loadDashboard();
-    }
-  }, [id]);
-
   const loadDashboard = useCallback(async () => {
     if (!id) return
 
@@ -39,6 +33,12 @@ export function DashboardShared() {
       setIsLoading(false)
     }
   }, [id, toast]);
+
+  useEffect(() => {
+    if (id) {
+      loadDashboard();
+    }
+  }, [id, loadDashboard]);
 
   if (isLoading) {
     return (

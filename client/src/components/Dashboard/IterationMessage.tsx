@@ -138,19 +138,35 @@ export function IterationMessage({ message }: IterationMessageProps) {
             {/* Collapsible "Iteration completed" section */}
             {message.resultDescription && (
               <Card className={cn(
-                "p-3 bg-card border transition-all duration-300",
-                isError && "border-red-300 dark:border-red-700"
+                "p-3 border transition-all duration-300",
+                isError
+                  ? "bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-700"
+                  : "bg-green-50 dark:bg-green-950/10 border-green-200 dark:border-green-800"
               )}>
                 <div
-                  className="flex items-center gap-2 cursor-pointer hover:bg-secondary/50 p-2 rounded -mx-2 transition-colors"
+                  className={cn(
+                    "flex items-center gap-2 cursor-pointer p-2 rounded -mx-2 transition-colors",
+                    isError
+                      ? "hover:bg-red-100 dark:hover:bg-red-950/30"
+                      : "hover:bg-green-100 dark:hover:bg-green-950/20"
+                  )}
                   onClick={() => setIsExpanded(!isExpanded)}
                 >
                   {isExpanded ? (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform duration-200" />
+                    <ChevronDown className={cn(
+                      "h-4 w-4 flex-shrink-0 transition-transform duration-200",
+                      isError ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
+                    )} />
                   ) : (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform duration-200" />
+                    <ChevronRight className={cn(
+                      "h-4 w-4 flex-shrink-0 transition-transform duration-200",
+                      isError ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
+                    )} />
                   )}
-                  <span className="text-xs font-medium text-muted-foreground">
+                  <span className={cn(
+                    "text-xs font-medium",
+                    isError ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
+                  )}>
                     {isError ? 'Error details' : 'Iteration completed'}
                   </span>
                 </div>

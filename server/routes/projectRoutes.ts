@@ -3,6 +3,7 @@ import { requireUser } from './middlewares/auth.js';
 import ProjectService from '../services/projectService.js';
 import TemplateService from '../services/templateService.js';
 import CodexMessageService from '../services/codexMessageService.js';
+import ChatMessage from '../models/ChatMessage.js';
 
 const router = express.Router();
 
@@ -561,6 +562,116 @@ router.delete('/:id/codex-messages', requireUser(), async (req: Request, res: Re
     console.error('[DELETE /api/projects/:id/codex-messages] Error deleting Codex messages:', error);
     res.status(500).json({
       error: error.message || 'Failed to delete Codex messages',
+    });
+  }
+});
+
+// Description: Save a chat message for a project
+// Endpoint: POST /api/projects/:id/chat-messages
+// Request: { messageType: 'user' | 'iteration_completed' | 'system', content: string, metadata?: object }
+// Response: { message: IChatMessage }
+router.post('/:id/chat-messages', requireUser(), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { messageType, content, metadata } = req.body;
+
+    console.log(`[POST /api/projects/:id/chat-messages] Saving chat message for project: ${id}`);
+
+    // Validate required fields
+    if (!messageType || !content) {
+      console.warn('[POST /api/projects/:id/chat-messages] Missing required fields');
+      return res.status(400).json({ error: 'messageType and content are required' });
+    }
+
+    // Validate message type
+    if (!['user', 'iteration_completed', 'system'].includes(messageType)) {
+      console.warn('[POST /api/projects/:id/chat-messages] Invalid message type');
+      return res.status(400).json({ error: 'Invalid messageType. Must be user, iteration_completed, or system' });
+    }
+
+    // Verify project exists and belongs to user
+    const project = await ProjectService.getProjectById(id, req.user._id.toString());
+    if (!project) {
+      console.warn(`[POST /api/projects/:id/chat-messages] Project not found: ${id}`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Create chat message
+    const message = new ChatMessage({
+      projectId: id,
+      messageType,
+      content,
+      metadata: metadata || {},
+    });
+
+    await message.save();
+
+    console.log(`[POST /api/projects/:id/chat-messages] Chat message saved successfully: ${message._id}`);
+    res.status(201).json({ message });
+  } catch (error) {
+    console.error('[POST /api/projects/:id/chat-messages] Error saving chat message:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to save chat message',
+    });
+  }
+});
+
+// Description: Get all chat messages for a project
+// Endpoint: GET /api/projects/:id/chat-messages
+// Request: {}
+// Response: { messages: Array<IChatMessage> }
+router.get('/:id/chat-messages', requireUser(), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    console.log(`[GET /api/projects/:id/chat-messages] Fetching chat messages for project: ${id}`);
+
+    // Verify project exists and belongs to user
+    const project = await ProjectService.getProjectById(id, req.user._id.toString());
+    if (!project) {
+      console.warn(`[GET /api/projects/:id/chat-messages] Project not found: ${id}`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Get messages sorted by creation time (chronological order)
+    const messages = await ChatMessage.find({ projectId: id }).sort({ createdAt: 1 }).lean();
+
+    console.log(`[GET /api/projects/:id/chat-messages] Retrieved ${messages.length} chat messages`);
+    res.status(200).json({ messages });
+  } catch (error) {
+    console.error('[GET /api/projects/:id/chat-messages] Error fetching chat messages:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to fetch chat messages',
+    });
+  }
+});
+
+// Description: Delete all chat messages for a project
+// Endpoint: DELETE /api/projects/:id/chat-messages
+// Request: {}
+// Response: { message: string, deletedCount: number }
+router.delete('/:id/chat-messages', requireUser(), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    console.log(`[DELETE /api/projects/:id/chat-messages] Deleting chat messages for project: ${id}`);
+
+    // Verify project exists and belongs to user
+    const project = await ProjectService.getProjectById(id, req.user._id.toString());
+    if (!project) {
+      console.warn(`[DELETE /api/projects/:id/chat-messages] Project not found: ${id}`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Delete messages
+    const result = await ChatMessage.deleteMany({ projectId: id });
+
+    console.log(`[DELETE /api/projects/:id/chat-messages] Deleted ${result.deletedCount} chat messages`);
+    res.status(200).json({ message: 'Chat messages deleted successfully', deletedCount: result.deletedCount });
+  } catch (error) {
+    console.error('[DELETE /api/projects/:id/chat-messages] Error deleting chat messages:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to delete chat messages',
     });
   }
 });
