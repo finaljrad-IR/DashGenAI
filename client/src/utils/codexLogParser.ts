@@ -49,7 +49,7 @@ export interface ClaudeCodeOutput {
 
 export interface ParsedClaudeMessage {
   id: string;
-  messageType: 'result' | 'error' | 'raw' | 'assistant' | 'system' | 'tool';
+  messageType: 'result' | 'error' | 'raw' | 'assistant' | 'system' | 'tool' | 'iteration';
   title: string;
   description?: string;
   icon?: string;
@@ -57,6 +57,10 @@ export interface ParsedClaudeMessage {
   status?: 'in_progress' | 'completed';
   rawData?: ClaudeCodeOutput;
   shouldIgnore?: boolean;
+  // For iteration message type
+  currentAction?: string;
+  hasCompleted?: boolean;
+  resultDescription?: string;
 }
 
 // Tool name to user-friendly message mapping
@@ -74,10 +78,14 @@ const TOOL_MESSAGES: Record<string, string> = {
 
 /**
  * Parse Claude Code JSON output into structured messages
- * Handles multiple JSON objects separated by newlines
+ * Groups all messages into a single iteration message that updates dynamically
  */
 export function parseClaudeOutput(output: string): ParsedClaudeMessage[] {
   const messages: ParsedClaudeMessage[] = [];
+  let currentAction = '';
+  let hasResult = false;
+  let resultDescription = '';
+  let isError = false;
 
   // Split by newlines to handle multiple JSON objects
   const lines = output.split('\n').filter(line => line.trim() !== '');
@@ -87,54 +95,22 @@ export function parseClaudeOutput(output: string): ParsedClaudeMessage[] {
       // Try to parse as JSON
       const data: ClaudeCodeOutput = JSON.parse(line);
 
-      // Rule 0: Ignore messages with type "status"
-      if (data.type === 'status') {
-        messages.push({
-          id: data.uuid || `status-${Date.now()}-${Math.random()}`,
-          messageType: 'system',
-          title: 'Status Message',
-          timestamp: Date.now(),
-          shouldIgnore: true,
-          rawData: data,
-        });
+      // Ignore status and system messages
+      if (data.type === 'status' || data.type === 'system') {
         continue;
       }
 
-      // Rule 1: Ignore messages with type "system"
-      if (data.type === 'system') {
-        messages.push({
-          id: data.uuid || `system-${Date.now()}-${Math.random()}`,
-          messageType: 'system',
-          title: 'System Message',
-          timestamp: Date.now(),
-          shouldIgnore: true,
-          rawData: data,
-        });
-        continue;
-      }
-
-      // Rule 1.5: Ignore messages with type "user" that contain only tool_result items
+      // Ignore user messages with tool_result
       if (data.type === 'user') {
         const contentItems = data.message?.content || [];
-
-        // Ignore messages that ONLY contain tool_result types
         const hasOnlyToolResults = contentItems.length > 0 &&
           contentItems.every(item => item.type === 'tool_result');
-
         if (hasOnlyToolResults) {
-          messages.push({
-            id: data.uuid || `user-tool-result-${Date.now()}-${Math.random()}`,
-            messageType: 'system',
-            title: 'User Tool Result',
-            timestamp: Date.now(),
-            shouldIgnore: true,
-            rawData: data,
-          });
           continue;
         }
       }
 
-      // Rule 2: Handle messages with type "assistant"
+      // Handle assistant messages
       if (data.type === 'assistant') {
         const contentItems = data.message?.content || [];
 
@@ -143,127 +119,61 @@ export function parseClaudeOutput(output: string): ParsedClaudeMessage[] {
           contentItems.every(item => item.type === 'tool_result');
 
         if (hasOnlyToolResults) {
-          messages.push({
-            id: data.uuid || `tool-result-${Date.now()}-${Math.random()}`,
-            messageType: 'system',
-            title: 'Tool Result',
-            timestamp: Date.now(),
-            shouldIgnore: true,
-            rawData: data,
-          });
           continue;
         }
 
-        // Check if any content item has a name (tool usage) or is a tool_result
+        // Check if any content item has a name (tool usage)
         const toolItems = contentItems.filter(item => item.name && item.type !== 'tool_result');
 
         if (toolItems.length > 0) {
-          // Parse tool usage - there can be many tools
+          // Update current action with the last tool
           for (const contentItem of toolItems) {
             if (contentItem.name) {
               const toolName = contentItem.name.toLowerCase();
               const friendlyMessage = TOOL_MESSAGES[toolName];
-
               if (friendlyMessage) {
-                // Known tool - create user-friendly message
-                messages.push({
-                  id: `${data.uuid || Date.now()}-tool-${toolName}-${Math.random()}`,
-                  messageType: 'tool',
-                  title: friendlyMessage,
-                  icon: '🔧',
-                  timestamp: Date.now(),
-                  status: 'in_progress',
-                  rawData: data,
-                });
-              } else {
-                // Unknown tool - show entire JSON
-                messages.push({
-                  id: `${data.uuid || Date.now()}-tool-unknown-${Math.random()}`,
-                  messageType: 'raw',
-                  title: 'Unknown Tool Usage',
-                  description: JSON.stringify(data, null, 2),
-                  icon: '⚠️',
-                  timestamp: Date.now(),
-                  status: 'completed',
-                  rawData: data,
-                });
+                currentAction = friendlyMessage;
               }
             }
           }
           continue;
         }
 
-        // Regular assistant message (text content) - only process text that's not tool_result
+        // Regular assistant message (text content)
         const textItems = contentItems.filter(item => item.text && item.type !== 'tool_result');
         if (textItems.length > 0) {
-          const textContent = textItems.map(item => item.text).join('\n') || 'Agent message';
-          messages.push({
-            id: data.uuid || `assistant-${Date.now()}-${Math.random()}`,
-            messageType: 'assistant',
-            title: 'Agent Message',
-            description: textContent,
-            icon: '🤖',
-            timestamp: Date.now(),
-            status: 'completed',
-            rawData: data,
-          });
+          const textContent = textItems.map(item => item.text).join('\n');
+          // This is the AI's response - set as current action
+          currentAction = textContent;
         }
         continue;
       }
 
-      // Rule 3: Handle result type with collapsible dropdown
+      // Handle result type - marks iteration as complete
       if (data.type === 'result') {
-        messages.push({
-          id: data.uuid || `result-${Date.now()}-${Math.random()}`,
-          messageType: 'result',
-          title: data.is_error ? 'Claude Code Error' : 'Claude Code Completed',
-          description: data.result || 'Task completed',
-          icon: data.is_error ? '❌' : '✅',
-          timestamp: Date.now(),
-          status: 'completed',
-          rawData: data,
-        });
+        hasResult = true;
+        isError = data.is_error || false;
+        resultDescription = data.result || 'Task completed';
         continue;
       }
-
-      // Unknown type - show raw JSON
-      messages.push({
-        id: `unknown-${Date.now()}-${Math.random()}`,
-        messageType: 'raw',
-        title: 'Claude Code Response',
-        description: JSON.stringify(data, null, 2),
-        icon: '📋',
-        timestamp: Date.now(),
-        status: 'completed',
-        rawData: data,
-      });
     } catch (error) {
-      // Not valid JSON for this line, skip it or add as raw if it's meaningful
+      // Not valid JSON for this line, skip it
       console.debug('Failed to parse line as JSON:', line, error);
-      if (line.trim().length > 0) {
-        messages.push({
-          id: `raw-${Date.now()}-${Math.random()}`,
-          messageType: 'raw',
-          title: 'Claude Code Output',
-          description: line,
-          icon: '📋',
-          timestamp: Date.now(),
-          status: 'completed',
-        });
-      }
     }
   }
 
-  // If no messages were parsed successfully, return a single raw message
-  if (messages.length === 0) {
+  // Create single iteration message that represents the entire execution
+  if (currentAction || hasResult) {
     messages.push({
-      id: `raw-${Date.now()}`,
-      messageType: 'raw',
-      title: 'Claude Code Output',
-      description: output,
-      icon: '📋',
+      id: `iteration-${Date.now()}`,
+      messageType: 'iteration',
+      title: 'AI Agent',
+      currentAction: currentAction || 'Starting...',
+      hasCompleted: hasResult,
+      resultDescription: resultDescription,
+      icon: hasResult ? (isError ? '❌' : '✅') : '🔄',
       timestamp: Date.now(),
-      status: 'completed',
+      status: hasResult ? 'completed' : 'in_progress',
     });
   }
 

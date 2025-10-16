@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 import { sendChatMessageStreaming, getChatHistory } from '@/api/dashboards';
 import { useToast } from '@/hooks/useToast';
 import { parseClaudeOutput, ParsedClaudeMessage } from '@/utils/codexLogParser';
-import { CodexMessage } from './CodexMessage';
+import { IterationMessage } from './IterationMessage';
 
 interface Message {
   _id: string;
@@ -27,10 +27,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
   const [inputMessage, setInputMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [claudeResponses, setClaudeResponses] = useState<ParsedClaudeMessage[]>([]);
-  const [displayedResponses, setDisplayedResponses] = useState<ParsedClaudeMessage[]>([]);
-  const [hasReceivedFirstMessage, setHasReceivedFirstMessage] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [currentIteration, setCurrentIteration] = useState<ParsedClaudeMessage | null>(null);
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -39,10 +36,13 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
     try {
       const response = await getChatHistory(dashboardId)
       if (response.messages) {
-        setMessages(response.messages)
+        // Only set user messages - no system messages
+        const userMessages = response.messages.filter((msg: Message) => msg.role === 'user');
+        setMessages(userMessages);
       }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load chat history'
+      console.error('[ChatInterface] Error loading chat history:', errorMessage);
       toast({
         title: "Error",
         description: errorMessage,
@@ -53,59 +53,16 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
     }
   }, [dashboardId, toast])
 
-
   useEffect(() => {
     loadChatHistory();
   }, [dashboardId, loadChatHistory]);
 
-  // Check if user was at the bottom before update
-  const isScrolledToBottom = () => {
-    if (!scrollViewportRef.current) return true;
-    const { scrollTop, scrollHeight, clientHeight } = scrollViewportRef.current;
-    // Consider "at bottom" if within 100px of the bottom
-    return scrollHeight - scrollTop - clientHeight < 100;
-  };
-
-  // Scroll to bottom function
-  const scrollToBottom = () => {
+  // Auto-scroll to bottom when messages or iteration updates
+  useEffect(() => {
     if (scrollViewportRef.current) {
       scrollViewportRef.current.scrollTop = scrollViewportRef.current.scrollHeight;
     }
-  };
-
-  // Process claude responses - when a new non-ignored message arrives, mark all previous as completed
-  useEffect(() => {
-    const visibleResponses = claudeResponses.filter(r => !r.shouldIgnore);
-
-    if (visibleResponses.length > 0) {
-      // Mark that we've received the first visible message
-      if (!hasReceivedFirstMessage) {
-        setHasReceivedFirstMessage(true);
-      }
-
-      // Update all previous messages to remove "in_progress" status when a new message arrives
-      const updatedResponses = visibleResponses.map((response, index) => {
-        // Keep "in_progress" only for the last message, remove it from all others
-        if (index < visibleResponses.length - 1 && response.status === 'in_progress') {
-          return { ...response, status: 'completed' as const };
-        }
-        return response;
-      });
-
-      setDisplayedResponses(updatedResponses);
-    } else {
-      setDisplayedResponses([]);
-    }
-  }, [claudeResponses, hasReceivedFirstMessage]);
-
-  // Auto-scroll effect - only scroll if user was already at bottom
-  useEffect(() => {
-    const wasAtBottom = isScrolledToBottom();
-    if (wasAtBottom) {
-      // Small delay to ensure DOM has updated
-      setTimeout(scrollToBottom, 10);
-    }
-  }, [messages, displayedResponses]);
+  }, [messages, currentIteration]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,9 +79,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
     const messageToSend = inputMessage
     setInputMessage('')
     setIsSending(true)
-    setClaudeResponses([]) // Clear previous Claude responses
-    setDisplayedResponses([]) // Clear displayed responses
-    setHasReceivedFirstMessage(false) // Reset for new message
+    setCurrentIteration(null) // Clear previous iteration
 
     // Store raw output for parsing
     let rawOutput = ''
@@ -144,16 +99,18 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
           const chunkStr = JSON.stringify(data)
           rawOutput += chunkStr + '\n'
 
-          // Parse and update Claude responses in real-time
+          // Parse and update the single iteration message in real-time
           const parsedResponses = parseClaudeOutput(rawOutput)
-          setClaudeResponses(parsedResponses)
-          console.log('[ChatInterface] Updated Claude responses with new chunk, total:', parsedResponses.length)
+          if (parsedResponses.length > 0) {
+            // Always take the last (most recent) iteration message
+            setCurrentIteration(parsedResponses[parsedResponses.length - 1])
+          }
+          console.log('[ChatInterface] Updated iteration message')
         },
         // onComplete callback
         (sessionId) => {
           console.log('[ChatInterface] Stream completed, session ID:', sessionId)
           setIsSending(false)
-          setHasReceivedFirstMessage(false)
 
           // Trigger dashboard refresh
           if (onDashboardUpdate) {
@@ -168,7 +125,6 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
         (error) => {
           console.error('[ChatInterface] Stream error:', error)
           setIsSending(false)
-          setHasReceivedFirstMessage(false)
           toast({
             title: "Error",
             description: error.message || 'Failed to send message',
@@ -188,7 +144,6 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
         variant: "destructive",
       })
       setIsSending(false)
-      setHasReceivedFirstMessage(false)
     }
   };
 
@@ -215,33 +170,18 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
             </div>
           ) : (
             <div className="space-y-4">
+              {/* User Messages */}
               {messages.map((message) => (
                 <div
                   key={message._id}
-                  className={`flex gap-3 animate-in fade-in slide-in-from-bottom-2 ${
-                    message.role === 'user' ? 'flex-row-reverse' : 'flex-row'
-                  }`}
+                  className="flex gap-3 flex-row-reverse animate-in fade-in slide-in-from-bottom-2"
                 >
-                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                    message.role === 'user'
-                      ? 'bg-gradient-to-br from-blue-500 to-purple-600'
-                      : 'bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800'
-                  }`}>
-                    {message.role === 'user' ? (
-                      <User className="h-4 w-4 text-white" />
-                    ) : (
-                      <Bot className="h-4 w-4 text-gray-700 dark:text-gray-300" />
-                    )}
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
+                    <User className="h-4 w-4 text-white" />
                   </div>
 
-                  <div className={`flex flex-col gap-1 max-w-[80%] ${
-                    message.role === 'user' ? 'items-end' : 'items-start'
-                  }`}>
-                    <Card className={`p-3 ${
-                      message.role === 'user'
-                        ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white border-0'
-                        : 'bg-card border'
-                    }`}>
+                  <div className="flex flex-col gap-1 max-w-[80%] items-end">
+                    <Card className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 text-white border-0">
                       <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                     </Card>
                     <span className="text-xs text-muted-foreground px-1">
@@ -251,8 +191,8 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
                 </div>
               ))}
 
-              {/* Show "Running claude code..." only if sending and no visible messages received yet */}
-              {isSending && !hasReceivedFirstMessage && (
+              {/* Show "Running claude code..." only if sending and no iteration message yet */}
+              {isSending && !currentIteration && (
                 <div className="flex gap-3 animate-in fade-in slide-in-from-bottom-2">
                   <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800">
                     <Bot className="h-4 w-4 text-gray-700 dark:text-gray-300" />
@@ -260,21 +200,15 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
                   <Card className="p-3 bg-card border">
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="text-sm text-muted-foreground">Running claude code...</span>
+                      <span className="text-sm text-muted-foreground">Running AI agent...</span>
                     </div>
                   </Card>
                 </div>
               )}
 
-              {/* Claude Code Responses */}
-              {displayedResponses.length > 0 && (
-                <div className="mt-4 space-y-3">
-                  {displayedResponses.map((response) => (
-                    <div key={response.id} className="animate-in fade-in slide-in-from-bottom-2">
-                      <CodexMessage message={response} />
-                    </div>
-                  ))}
-                </div>
+              {/* Current Iteration Message - single dynamic message */}
+              {currentIteration && (
+                <IterationMessage message={currentIteration} />
               )}
             </div>
           )}
