@@ -383,8 +383,6 @@ class ProjectService {
       const { getDatabaseDocumentation, analyzeDatabase, generateDashboardPrompt } = await import('./codexService.js');
       let dbDoc = await getDatabaseDocumentation(projectId);
 
-      let systemPrompt: string | undefined;
-
       if (!dbDoc) {
         console.log(`[ProjectService] No database documentation found. Analyzing database...`);
 
@@ -403,12 +401,25 @@ class ProjectService {
         }
       }
 
-      // Generate or use custom prompt
-      const prompt = customPrompt || generateDashboardPrompt(dbDoc, project.mongoConnectionString);
+      // Determine the prompt and system prompt based on whether this is the first run or a continuation
+      let prompt: string;
+      let systemPrompt: string | undefined;
 
-      // Create system prompt with database overview
-      if (dbDoc) {
-        systemPrompt = `Database Overview: ${JSON.stringify(dbDoc.summary || {})}`;
+      if (!project.claudeSessionId && !customPrompt) {
+        // First run: Use generated dashboard prompt as system prompt, empty user prompt
+        systemPrompt = generateDashboardPrompt(dbDoc, project.mongoConnectionString);
+        prompt = 'Please start implementing the dashboard based on the instructions provided in the system prompt.';
+        console.log(`[ProjectService] First run: Using generated dashboard prompt as system prompt`);
+      } else if (customPrompt) {
+        // User provided a custom message: Use it as the prompt, keep the generated prompt as system prompt
+        systemPrompt = generateDashboardPrompt(dbDoc, project.mongoConnectionString);
+        prompt = customPrompt;
+        console.log(`[ProjectService] Custom prompt provided: "${customPrompt.substring(0, 50)}..."`);
+      } else {
+        // Continuation with existing session: Just use the custom prompt if provided
+        systemPrompt = undefined; // Don't send system prompt again for resuming sessions
+        prompt = customPrompt || 'Please continue with the dashboard implementation.';
+        console.log(`[ProjectService] Resuming session with prompt: "${prompt.substring(0, 50)}..."`);
       }
 
       // Run Claude Code on sandbox
@@ -427,24 +438,39 @@ class ProjectService {
         throw new Error(result.error || 'Failed to run Claude Code');
       }
 
-      // Parse the output to extract session ID
+      // Parse the output to extract session ID from newline-delimited JSON (NDJSON)
       let newSessionId: string | null = null;
       try {
-        const jsonOutput = JSON.parse(result.rawOutput);
-        if (jsonOutput.session_id) {
-          newSessionId = jsonOutput.session_id;
-          console.log(`[ProjectService] New session ID from Claude Code: ${newSessionId}`);
+        // Split by newlines and parse each line as JSON
+        const lines = result.rawOutput.trim().split('\n').filter(line => line.trim());
 
-          // Update project with new session ID
+        for (const line of lines) {
+          try {
+            const jsonOutput = JSON.parse(line);
+            // Look for the session_id in the first message (usually the init message)
+            if (jsonOutput.session_id && !newSessionId) {
+              newSessionId = jsonOutput.session_id;
+              console.log(`[ProjectService] New session ID from Claude Code: ${newSessionId}`);
+              break;
+            }
+          } catch (lineParseError) {
+            // Skip lines that aren't valid JSON
+            continue;
+          }
+        }
+
+        // Update project with new session ID if found
+        if (newSessionId && newSessionId !== project.claudeSessionId) {
           project.claudeSessionId = newSessionId;
           await project.save();
+          console.log(`[ProjectService] Saved new session ID to project: ${newSessionId}`);
         }
       } catch (parseError) {
         console.warn(`[ProjectService] Failed to parse Claude Code output for session ID:`, parseError);
       }
 
       console.log(`[ProjectService] Claude Code execution completed successfully`);
-      return { rawOutput: result.rawOutput, sessionId: newSessionId };
+      return { rawOutput: result.rawOutput, sessionId: newSessionId || project.claudeSessionId || null };
     } catch (error) {
       console.error(`[ProjectService] Error running Claude Code: ${error.message}`, error);
       throw new Error(`Failed to run Claude Code: ${error.message}`);
