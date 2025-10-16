@@ -38,17 +38,24 @@ export interface ClaudeCodeOutput {
   }>;
   permission_denials?: unknown[];
   uuid?: string;
+  message?: {
+    content?: Array<{
+      text?: string;
+      type?: string;
+    }>;
+  };
 }
 
 export interface ParsedClaudeMessage {
   id: string;
-  messageType: 'result' | 'error' | 'raw';
+  messageType: 'result' | 'error' | 'raw' | 'assistant' | 'system';
   title: string;
   description?: string;
   icon?: string;
   timestamp: number;
   status?: 'in_progress' | 'completed';
   rawData?: ClaudeCodeOutput;
+  shouldIgnore?: boolean;
 }
 
 /**
@@ -59,7 +66,34 @@ export function parseClaudeOutput(output: string): ParsedClaudeMessage {
     // Try to parse as JSON
     const data: ClaudeCodeOutput = JSON.parse(output);
 
-    // Handle result type
+    // Rule 1: Ignore messages with type "system"
+    if (data.type === 'system') {
+      return {
+        id: data.uuid || `system-${Date.now()}`,
+        messageType: 'system',
+        title: 'System Message',
+        timestamp: Date.now(),
+        shouldIgnore: true,
+        rawData: data,
+      };
+    }
+
+    // Rule 2: Handle messages with type "assistant"
+    if (data.type === 'assistant') {
+      const textContent = data.message?.content?.[0]?.text || 'Agent message';
+      return {
+        id: data.uuid || `assistant-${Date.now()}`,
+        messageType: 'assistant',
+        title: 'Agent Message',
+        description: textContent,
+        icon: '🤖',
+        timestamp: Date.now(),
+        status: 'completed',
+        rawData: data,
+      };
+    }
+
+    // Rule 3: Handle result type with collapsible dropdown
     if (data.type === 'result') {
       return {
         id: data.uuid || `result-${Date.now()}`,

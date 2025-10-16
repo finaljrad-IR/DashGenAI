@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { sendChatMessage, getChatHistory } from '@/api/dashboards';
 import { useToast } from '@/hooks/useToast';
 import { parseClaudeOutput, ParsedClaudeMessage } from '@/utils/codexLogParser';
+import { CodexMessage } from './CodexMessage';
 
 interface Message {
   _id: string;
@@ -196,24 +197,9 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
             )}
 
             {/* Claude Code Response */}
-            {claudeResponse && (
+            {claudeResponse && !claudeResponse.shouldIgnore && (
               <div className="mt-4 animate-in fade-in slide-in-from-bottom-2">
-                <Card className="p-4 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 border-purple-200 dark:border-purple-800">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">{claudeResponse.icon}</span>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-sm mb-1">{claudeResponse.title}</h4>
-                      {claudeResponse.description && (
-                        <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono bg-black/5 dark:bg-white/5 p-2 rounded mt-2 overflow-x-auto">
-                          {claudeResponse.description}
-                        </pre>
-                      )}
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {formatTime(claudeResponse.timestamp)}
-                      </p>
-                    </div>
-                  </div>
-                </Card>
+                <CodexMessage message={claudeResponse} />
               </div>
             )}
           </div>
