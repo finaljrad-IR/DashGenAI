@@ -28,7 +28,9 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [claudeResponses, setClaudeResponses] = useState<ParsedClaudeMessage[]>([]);
+  const [hasReceivedFirstMessage, setHasReceivedFirstMessage] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollViewportRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   const loadChatHistory = useCallback(async () => {
@@ -55,15 +57,29 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
     loadChatHistory();
   }, [dashboardId, loadChatHistory]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, claudeResponses]);
+  // Check if user was at the bottom before update
+  const isScrolledToBottom = () => {
+    if (!scrollViewportRef.current) return true;
+    const { scrollTop, scrollHeight, clientHeight } = scrollViewportRef.current;
+    // Consider "at bottom" if within 100px of the bottom
+    return scrollHeight - scrollTop - clientHeight < 100;
+  };
 
+  // Scroll to bottom function
   const scrollToBottom = () => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (scrollViewportRef.current) {
+      scrollViewportRef.current.scrollTop = scrollViewportRef.current.scrollHeight;
     }
   };
+
+  // Auto-scroll effect - only scroll if user was already at bottom
+  useEffect(() => {
+    const wasAtBottom = isScrolledToBottom();
+    if (wasAtBottom) {
+      // Small delay to ensure DOM has updated
+      setTimeout(scrollToBottom, 10);
+    }
+  }, [messages, claudeResponses]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +97,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
     setInputMessage('')
     setIsSending(true)
     setClaudeResponses([]) // Clear previous Claude responses
+    setHasReceivedFirstMessage(false) // Reset for new message
 
     // Store raw output for parsing
     let rawOutput = ''
@@ -96,6 +113,11 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
         (data) => {
           console.log('[ChatInterface] Received chunk:', data)
 
+          // Mark that we've received the first message
+          if (!hasReceivedFirstMessage) {
+            setHasReceivedFirstMessage(true)
+          }
+
           // Accumulate raw output
           const chunkStr = JSON.stringify(data)
           rawOutput += chunkStr + '\n'
@@ -109,6 +131,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
         (sessionId) => {
           console.log('[ChatInterface] Stream completed, session ID:', sessionId)
           setIsSending(false)
+          setHasReceivedFirstMessage(false)
 
           // Trigger dashboard refresh
           if (onDashboardUpdate) {
@@ -123,6 +146,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
         (error) => {
           console.error('[ChatInterface] Stream error:', error)
           setIsSending(false)
+          setHasReceivedFirstMessage(false)
           toast({
             title: "Error",
             description: error.message || 'Failed to send message',
@@ -142,6 +166,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
         variant: "destructive",
       })
       setIsSending(false)
+      setHasReceivedFirstMessage(false)
     }
   };
 
@@ -160,77 +185,80 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
         <p className="text-sm text-muted-foreground">Ask me to modify your dashboard</p>
       </div>
 
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {messages.map((message) => (
-              <div
-                key={message._id}
-                className={`flex gap-3 animate-in fade-in slide-in-from-bottom-2 ${
-                  message.role === 'user' ? 'flex-row-reverse' : 'flex-row'
-                }`}
-              >
-                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                  message.role === 'user' 
-                    ? 'bg-gradient-to-br from-blue-500 to-purple-600' 
-                    : 'bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800'
-                }`}>
-                  {message.role === 'user' ? (
-                    <User className="h-4 w-4 text-white" />
-                  ) : (
-                    <Bot className="h-4 w-4 text-gray-700 dark:text-gray-300" />
-                  )}
-                </div>
-                
-                <div className={`flex flex-col gap-1 max-w-[80%] ${
-                  message.role === 'user' ? 'items-end' : 'items-start'
-                }`}>
-                  <Card className={`p-3 ${
+      <ScrollArea className="flex-1 p-4">
+        <div ref={scrollViewportRef} className="h-full overflow-y-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {messages.map((message) => (
+                <div
+                  key={message._id}
+                  className={`flex gap-3 animate-in fade-in slide-in-from-bottom-2 ${
+                    message.role === 'user' ? 'flex-row-reverse' : 'flex-row'
+                  }`}
+                >
+                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
                     message.role === 'user'
-                      ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white border-0'
-                      : 'bg-card border'
+                      ? 'bg-gradient-to-br from-blue-500 to-purple-600'
+                      : 'bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800'
                   }`}>
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                  </Card>
-                  <span className="text-xs text-muted-foreground px-1">
-                    {formatTime(message.timestamp)}
-                  </span>
-                </div>
-              </div>
-            ))}
-            
-            {isSending && (
-              <div className="flex gap-3 animate-in fade-in slide-in-from-bottom-2">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800">
-                  <Bot className="h-4 w-4 text-gray-700 dark:text-gray-300" />
-                </div>
-                <Card className="p-3 bg-card border">
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm text-muted-foreground">Claude Code is working...</span>
+                    {message.role === 'user' ? (
+                      <User className="h-4 w-4 text-white" />
+                    ) : (
+                      <Bot className="h-4 w-4 text-gray-700 dark:text-gray-300" />
+                    )}
                   </div>
-                </Card>
-              </div>
-            )}
 
-            {/* Claude Code Responses */}
-            {claudeResponses.length > 0 && (
-              <div className="mt-4 space-y-3">
-                {claudeResponses.map((response) => (
-                  !response.shouldIgnore && (
-                    <div key={response.id} className="animate-in fade-in slide-in-from-bottom-2">
-                      <CodexMessage message={response} />
+                  <div className={`flex flex-col gap-1 max-w-[80%] ${
+                    message.role === 'user' ? 'items-end' : 'items-start'
+                  }`}>
+                    <Card className={`p-3 ${
+                      message.role === 'user'
+                        ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white border-0'
+                        : 'bg-card border'
+                    }`}>
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    </Card>
+                    <span className="text-xs text-muted-foreground px-1">
+                      {formatTime(message.timestamp)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {/* Show "Claude Code is working..." only if sending and no messages received yet */}
+              {isSending && !hasReceivedFirstMessage && (
+                <div className="flex gap-3 animate-in fade-in slide-in-from-bottom-2">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800">
+                    <Bot className="h-4 w-4 text-gray-700 dark:text-gray-300" />
+                  </div>
+                  <Card className="p-3 bg-card border">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm text-muted-foreground">Claude Code is working...</span>
                     </div>
-                  )
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                  </Card>
+                </div>
+              )}
+
+              {/* Claude Code Responses */}
+              {claudeResponses.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  {claudeResponses.map((response) => (
+                    !response.shouldIgnore && (
+                      <div key={response.id} className="animate-in fade-in slide-in-from-bottom-2">
+                        <CodexMessage message={response} />
+                      </div>
+                    )
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </ScrollArea>
 
       <div className="p-4 border-t bg-card/50 backdrop-blur-sm">

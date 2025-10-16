@@ -64,10 +64,10 @@ const TOOL_MESSAGES: Record<string, string> = {
   'edit': 'Editing files',
   'write': 'Writing files',
   'read': 'Reading files',
-  'websearch': 'Searching web',
+  'websearch': 'Searching the web',
   'bash': 'Running a command',
-  'ls': 'Running a command',
-  'multiedit': 'Running a command',
+  'ls': 'Listing files',
+  'multiedit': 'Editing files',
   'killbash': 'Stopping a command',
   'bashoutput': 'Getting the command run output',
 };
@@ -115,15 +115,16 @@ export function parseClaudeOutput(output: string): ParsedClaudeMessage[] {
 
       // Rule 2: Handle messages with type "assistant"
       if (data.type === 'assistant') {
-        // Check if this is a tool usage message
         const contentItems = data.message?.content || [];
-        const hasTools = contentItems.some(item => item.name);
 
-        if (hasTools) {
+        // Check if any content item has a name (tool usage) or is a tool_result
+        const toolItems = contentItems.filter(item => item.name && item.type !== 'tool_result');
+
+        if (toolItems.length > 0) {
           // Parse tool usage - there can be many tools
-          for (const contentItem of contentItems) {
+          for (const contentItem of toolItems) {
             if (contentItem.name) {
-              const toolName = contentItem.name;
+              const toolName = contentItem.name.toLowerCase();
               const friendlyMessage = TOOL_MESSAGES[toolName];
 
               if (friendlyMessage) {
@@ -155,18 +156,21 @@ export function parseClaudeOutput(output: string): ParsedClaudeMessage[] {
           continue;
         }
 
-        // Regular assistant message (text content)
-        const textContent = data.message?.content?.[0]?.text || 'Agent message';
-        messages.push({
-          id: data.uuid || `assistant-${Date.now()}-${Math.random()}`,
-          messageType: 'assistant',
-          title: 'Agent Message',
-          description: textContent,
-          icon: '🤖',
-          timestamp: Date.now(),
-          status: 'completed',
-          rawData: data,
-        });
+        // Regular assistant message (text content) - only process text that's not tool_result
+        const textItems = contentItems.filter(item => item.text && item.type !== 'tool_result');
+        if (textItems.length > 0) {
+          const textContent = textItems.map(item => item.text).join('\n') || 'Agent message';
+          messages.push({
+            id: data.uuid || `assistant-${Date.now()}-${Math.random()}`,
+            messageType: 'assistant',
+            title: 'Agent Message',
+            description: textContent,
+            icon: '🤖',
+            timestamp: Date.now(),
+            status: 'completed',
+            rawData: data,
+          });
+        }
         continue;
       }
 
