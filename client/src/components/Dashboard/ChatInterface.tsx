@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
-import { sendChatMessage, getChatHistory } from '@/api/dashboards';
+import { sendChatMessageStreaming, getChatHistory } from '@/api/dashboards';
 import { useToast } from '@/hooks/useToast';
 import { parseClaudeOutput, ParsedClaudeMessage } from '@/utils/codexLogParser';
 import { CodexMessage } from './CodexMessage';
@@ -77,49 +77,70 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
     }
 
     setMessages(prev => [...prev, userMessage])
+    const messageToSend = inputMessage
     setInputMessage('')
     setIsSending(true)
     setClaudeResponses([]) // Clear previous Claude responses
 
+    // Store raw output for parsing
+    let rawOutput = ''
+
     try {
-      console.log('[ChatInterface] Sending message to Claude Code:', inputMessage)
-      const response = await sendChatMessage(dashboardId, inputMessage)
-      console.log('[ChatInterface] Received response:', response)
+      console.log('[ChatInterface] Starting streaming request to Claude Code:', messageToSend)
 
-      // Parse Claude Code raw output (now returns array of messages)
-      if (response.rawOutput) {
-        const parsedResponses = parseClaudeOutput(response.rawOutput)
-        setClaudeResponses(parsedResponses)
-        console.log('[ChatInterface] Parsed Claude responses:', parsedResponses)
-      }
+      // Use streaming API for real-time updates
+      const cleanup = sendChatMessageStreaming(
+        dashboardId,
+        messageToSend,
+        // onChunk callback - handle each chunk as it arrives
+        (data) => {
+          console.log('[ChatInterface] Received chunk:', data)
 
-      // Add system reply message
-      if (response.reply) {
-        const assistantMessage = {
-          _id: (Date.now() + 1).toString(),
-          role: 'system' as const,
-          content: response.reply,
-          timestamp: new Date().toISOString(),
+          // Accumulate raw output
+          const chunkStr = JSON.stringify(data)
+          rawOutput += chunkStr + '\n'
+
+          // Parse and update Claude responses in real-time
+          const parsedResponses = parseClaudeOutput(rawOutput)
+          setClaudeResponses(parsedResponses)
+          console.log('[ChatInterface] Updated Claude responses with new chunk, total:', parsedResponses.length)
+        },
+        // onComplete callback
+        (sessionId) => {
+          console.log('[ChatInterface] Stream completed, session ID:', sessionId)
+          setIsSending(false)
+
+          // Trigger dashboard refresh
+          if (onDashboardUpdate) {
+            onDashboardUpdate()
+            toast({
+              title: "Dashboard Updated",
+              description: "Your dashboard has been updated successfully.",
+            })
+          }
+        },
+        // onError callback
+        (error) => {
+          console.error('[ChatInterface] Stream error:', error)
+          setIsSending(false)
+          toast({
+            title: "Error",
+            description: error.message || 'Failed to send message',
+            variant: "destructive",
+          })
         }
-        setMessages(prev => [...prev, assistantMessage])
-      }
+      )
 
-      if (response.status === 'completed' && onDashboardUpdate) {
-        onDashboardUpdate()
-        toast({
-          title: "Dashboard Updated",
-          description: "Your dashboard has been updated successfully.",
-        })
-      }
+      // Store cleanup function (not needed for now, but could be useful for cancellation)
+      // If component unmounts, this won't be called automatically
     } catch (error: unknown) {
-      console.error('[ChatInterface] Error sending message:', error)
+      console.error('[ChatInterface] Error setting up stream:', error)
       const errorMessage = error instanceof Error ? error.message : 'Failed to send message'
       toast({
         title: "Error",
         description: errorMessage,
         variant: "destructive",
       })
-    } finally {
       setIsSending(false)
     }
   };

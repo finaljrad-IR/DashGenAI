@@ -120,7 +120,7 @@ export const updateDashboard = (id: string, data: { name: string }) => {
   // }
 };
 
-// Description: Send chat message to modify dashboard using Claude Code
+// Description: Send chat message to modify dashboard using Claude Code (deprecated - use streaming version)
 // Endpoint: POST /api/projects/:id/run-claude
 // Request: { prompt: string }
 // Response: { success: boolean, message: string, rawOutput: string, sessionId: string | null }
@@ -143,6 +143,91 @@ export const sendChatMessage = async (id: string, message: string) => {
     console.error('[sendChatMessage] Error sending message:', error);
     throw new Error(error?.response?.data?.error || error.message);
   }
+};
+
+// Description: Send chat message to modify dashboard using Claude Code with real-time streaming
+// Endpoint: GET /api/projects/:id/run-claude/stream?prompt=xxx
+// Request: Query param: prompt (string)
+// Response: Server-Sent Events stream with real-time Claude Code output
+export const sendChatMessageStreaming = (
+  id: string,
+  message: string,
+  onChunk: (data: { type: string; [key: string]: unknown }) => void,
+  onComplete: (sessionId: string | null) => void,
+  onError: (error: Error) => void
+): (() => void) => {
+  console.log('[sendChatMessageStreaming] Starting streaming request to Claude Code:', message);
+
+  // Get auth token from localStorage
+  const token = localStorage.getItem('accessToken');
+  if (!token) {
+    console.error('[sendChatMessageStreaming] No auth token found');
+    onError(new Error('Authentication required'));
+    return () => {};
+  }
+
+  // Encode the prompt for URL
+  const encodedPrompt = encodeURIComponent(message);
+
+  // Create EventSource URL with token in query parameter (EventSource can't send custom headers)
+  const baseUrl = import.meta.env.VITE_API_URL || '';
+  const streamUrl = `${baseUrl}/api/projects/${id}/run-claude/stream?prompt=${encodedPrompt}&token=${token}`;
+
+  console.log('[sendChatMessageStreaming] Opening EventSource connection');
+  const eventSource = new EventSource(streamUrl);
+
+  let sessionId: string | null = null;
+
+  eventSource.onopen = () => {
+    console.log('[sendChatMessageStreaming] EventSource connection opened');
+  };
+
+  eventSource.onmessage = (event) => {
+    try {
+      console.log('[sendChatMessageStreaming] Received chunk:', event.data.substring(0, 100));
+      const data = JSON.parse(event.data);
+
+      // Extract session ID if present
+      if (data.session_id && !sessionId) {
+        sessionId = data.session_id;
+        console.log('[sendChatMessageStreaming] Session ID found:', sessionId);
+      }
+
+      // Handle completion event
+      if (data.type === 'complete') {
+        console.log('[sendChatMessageStreaming] Stream completed');
+        eventSource.close();
+        onComplete(data.sessionId || sessionId);
+        return;
+      }
+
+      // Handle error event
+      if (data.type === 'error') {
+        console.error('[sendChatMessageStreaming] Error received:', data.message);
+        eventSource.close();
+        onError(new Error(data.message || 'Unknown error'));
+        return;
+      }
+
+      // Send chunk to callback
+      onChunk(data);
+    } catch (parseError) {
+      console.error('[sendChatMessageStreaming] Error parsing chunk:', parseError);
+      // Don't close on parse errors, some chunks might not be JSON
+    }
+  };
+
+  eventSource.onerror = (error) => {
+    console.error('[sendChatMessageStreaming] EventSource error:', error);
+    eventSource.close();
+    onError(new Error('Connection error or stream ended'));
+  };
+
+  // Return cleanup function
+  return () => {
+    console.log('[sendChatMessageStreaming] Closing EventSource connection');
+    eventSource.close();
+  };
 };
 
 // Description: Get chat history for dashboard

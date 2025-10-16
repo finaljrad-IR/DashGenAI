@@ -562,7 +562,7 @@ class DaytonaService {
   }
 
   /**
-   * Run Claude Code on the sandbox with MongoDB documentation
+   * Run Claude Code on the sandbox with MongoDB documentation (non-streaming version - deprecated)
    */
   async runClaudeCodeOnSandbox(
     sandboxId: string,
@@ -631,6 +631,151 @@ class DaytonaService {
     } catch (error) {
       console.error(`[DaytonaService] Error running Claude Code:`, error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
+  /**
+   * Run Claude Code on the sandbox with real-time streaming output
+   * Returns an async generator that yields log chunks as they become available
+   */
+  async *runClaudeCodeOnSandboxStreaming(
+    sandboxId: string,
+    anthropicApiKey: string,
+    prompt: string,
+    systemPrompt?: string,
+    existingSessionId?: string
+  ): AsyncGenerator<string, void, unknown> {
+    console.log(`[DaytonaService] Starting Claude Code streaming on sandbox ${sandboxId}`);
+    console.log(`[DaytonaService] Existing session ID: ${existingSessionId || 'None (new session)'}`);
+
+    try {
+      // Get or reconnect to the sandbox
+      const sandbox = await this.getOrReconnectSandbox(sandboxId);
+
+      // Step 1: Install Claude Code CLI if not already installed
+      console.log(`[DaytonaService] Installing Claude Code CLI...`);
+      yield JSON.stringify({ type: 'status', message: 'Installing Claude Code CLI...' }) + '\n';
+
+      const installResult = await this.executeCommand(
+        sandboxId,
+        'npm install -g @anthropic-ai/claude-code || true'
+      );
+
+      if (!installResult.success) {
+        console.warn(`[DaytonaService] Claude Code CLI installation warning: ${installResult.error}`);
+      } else {
+        console.log(`[DaytonaService] Claude Code CLI installation output: ${installResult.output?.substring(0, 200)}`);
+      }
+
+      // Step 2: Setup Claude Code authentication
+      console.log(`[DaytonaService] Setting up Claude Code authentication...`);
+      yield JSON.stringify({ type: 'status', message: 'Setting up authentication...' }) + '\n';
+      await this.setupClaudeAuthentication(sandboxId, anthropicApiKey);
+
+      // Step 3: Build the Claude Code command
+      console.log(`[DaytonaService] Executing Claude Code with prompt`);
+      yield JSON.stringify({ type: 'status', message: 'Starting Claude Code execution...' }) + '\n';
+
+      // Escape the prompt for command line
+      const escapedPrompt = prompt.replace(/'/g, "'\\''").replace(/\n/g, ' ');
+
+      // Build command parts - output to a log file so we can tail it
+      const logFile = `/tmp/claude-${Date.now()}.log`;
+      let claudeCommand = `cd workspace && ANTHROPIC_API_KEY='${anthropicApiKey}' claude -p '${escapedPrompt}' --output-format stream-json --verbose --dangerously-skip-permissions --model haiku`;
+
+      // Add system prompt if provided
+      if (systemPrompt) {
+        const escapedSystemPrompt = systemPrompt.replace(/'/g, "'\\''").replace(/\n/g, ' ');
+        claudeCommand += ` --append-system-prompt '${escapedSystemPrompt}'`;
+      }
+
+      // Add resume flag if we have an existing session
+      if (existingSessionId) {
+        claudeCommand += ` --resume ${existingSessionId}`;
+        console.log(`[DaytonaService] Resuming existing Claude session: ${existingSessionId}`);
+      }
+
+      // Add output redirection and run in background
+      claudeCommand += ` > ${logFile} 2>&1 & echo $!`;
+
+      // Start the command in background
+      console.log(`[DaytonaService] Starting Claude Code command in background...`);
+      const startResult = await sandbox.process.executeCommand(claudeCommand);
+      const pid = startResult.result?.trim();
+      console.log(`[DaytonaService] Claude Code started with PID: ${pid}`);
+
+      // Wait a moment for the log file to be created
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Stream the output by tailing the log file
+      let lastSize = 0;
+      let consecutiveEmptyReads = 0;
+      const maxEmptyReads = 10; // Stop after 10 consecutive empty reads (20 seconds with 2s interval)
+
+      while (true) {
+        try {
+          // Check if process is still running
+          const checkProcess = await sandbox.process.executeCommand(`ps -p ${pid} > /dev/null 2>&1 && echo "running" || echo "stopped"`);
+          const isRunning = checkProcess.result?.trim() === 'running';
+
+          // Read new content from log file
+          const readCommand = `tail -c +${lastSize + 1} ${logFile} 2>/dev/null || echo ""`;
+          const readResult = await sandbox.process.executeCommand(readCommand);
+          const newContent = readResult.result || '';
+
+          if (newContent.length > 0) {
+            console.log(`[DaytonaService] Read ${newContent.length} new bytes from log file`);
+            lastSize += newContent.length;
+            consecutiveEmptyReads = 0;
+
+            // Yield each line separately
+            const lines = newContent.split('\n');
+            for (const line of lines) {
+              if (line.trim()) {
+                yield line + '\n';
+              }
+            }
+          } else {
+            consecutiveEmptyReads++;
+            console.log(`[DaytonaService] No new content, consecutive empty reads: ${consecutiveEmptyReads}`);
+          }
+
+          // If process stopped and no new content, we're done
+          if (!isRunning && consecutiveEmptyReads > 2) {
+            console.log(`[DaytonaService] Process stopped and no new output detected`);
+            break;
+          }
+
+          // If too many empty reads even with running process, assume it's stuck
+          if (consecutiveEmptyReads >= maxEmptyReads) {
+            console.log(`[DaytonaService] Too many consecutive empty reads, assuming completion`);
+            break;
+          }
+
+          // Wait before next poll
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (pollError) {
+          console.error(`[DaytonaService] Error polling log file:`, pollError);
+          yield JSON.stringify({ type: 'error', message: 'Error reading output' }) + '\n';
+          break;
+        }
+      }
+
+      // Clean up log file
+      console.log(`[DaytonaService] Cleaning up log file: ${logFile}`);
+      await sandbox.process.executeCommand(`rm -f ${logFile}`).catch(err => {
+        console.warn(`[DaytonaService] Failed to clean up log file:`, err);
+      });
+
+      console.log(`[DaytonaService] Claude Code streaming completed`);
+      yield JSON.stringify({ type: 'status', message: 'Execution completed' }) + '\n';
+    } catch (error) {
+      console.error(`[DaytonaService] Error in Claude Code streaming:`, error);
+      yield JSON.stringify({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      }) + '\n';
+      throw error;
     }
   }
 

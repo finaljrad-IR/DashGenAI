@@ -258,7 +258,7 @@ router.post('/:id/sandbox/deploy', requireUser(), async (req: Request, res: Resp
   }
 });
 
-// Description: Run Claude Code on project sandbox to implement dashboard
+// Description: Run Claude Code on project sandbox to implement dashboard (deprecated - use streaming version)
 // Endpoint: POST /api/projects/:id/run-claude
 // Request: { prompt?: string }
 // Response: { success: boolean, message: string, rawOutput: string, sessionId: string | null }
@@ -297,6 +297,160 @@ router.post('/:id/run-claude', requireUser(), async (req: Request, res: Response
   } catch (error) {
     console.error(`[POST /api/projects/:id/run-claude] Error running Claude Code:`, error);
     res.status(500).json({ error: error.message || 'Failed to run Claude Code' });
+  }
+});
+
+// Description: Run Claude Code on project sandbox with real-time streaming output
+// Endpoint: GET /api/projects/:id/run-claude/stream
+// Request: Query params: { prompt?: string }
+// Response: Server-Sent Events stream with Claude Code output
+router.get('/:id/run-claude/stream', requireUser(), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { prompt } = req.query;
+
+    console.log(`[GET /api/projects/:id/run-claude/stream] Starting Claude Code streaming for project ${id}`);
+
+    // Get project
+    const project = await ProjectService.getProjectById(id, req.user._id.toString());
+    if (!project) {
+      console.warn(`[GET /api/projects/:id/run-claude/stream] Project not found: ${id}`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Check if sandbox is deployed
+    if (!project.sandboxId) {
+      console.warn(`[GET /api/projects/:id/run-claude/stream] Sandbox not deployed for project: ${id}`);
+      return res.status(400).json({ error: 'Sandbox not deployed yet' });
+    }
+
+    // Set up SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering in nginx
+
+    console.log(`[GET /api/projects/:id/run-claude/stream] SSE headers set, starting stream`);
+
+    // Get Anthropic API key
+    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicApiKey) {
+      const errorData = JSON.stringify({ type: 'error', message: 'ANTHROPIC_API_KEY not configured' });
+      res.write(`data: ${errorData}\n\n`);
+      res.end();
+      return;
+    }
+
+    // Get or create database documentation
+    const { getDatabaseDocumentation, analyzeDatabase, generateDashboardPrompt } = await import('../services/codexService.js');
+    let dbDoc = await getDatabaseDocumentation(id);
+
+    if (!dbDoc) {
+      console.log(`[GET /api/projects/:id/run-claude/stream] No database documentation found. Analyzing database...`);
+      res.write(`data: ${JSON.stringify({ type: 'status', message: 'Analyzing database schema...' })}\n\n`);
+
+      if (!project.mongoConnectionString) {
+        const errorData = JSON.stringify({ type: 'error', message: 'MongoDB connection string not found in project' });
+        res.write(`data: ${errorData}\n\n`);
+        res.end();
+        return;
+      }
+
+      try {
+        dbDoc = await analyzeDatabase(project.mongoConnectionString, id);
+        console.log(`[GET /api/projects/:id/run-claude/stream] Database analyzed successfully`);
+        res.write(`data: ${JSON.stringify({ type: 'status', message: 'Database analysis complete' })}\n\n`);
+      } catch (analyzeError) {
+        console.error(`[GET /api/projects/:id/run-claude/stream] Failed to analyze database:`, analyzeError);
+        const errorData = JSON.stringify({ type: 'error', message: `Failed to analyze database: ${analyzeError.message}` });
+        res.write(`data: ${errorData}\n\n`);
+        res.end();
+        return;
+      }
+    }
+
+    // Determine the prompt and system prompt
+    let finalPrompt: string;
+    let systemPrompt: string | undefined;
+
+    if (!project.claudeSessionId && !prompt) {
+      // First run: Use generated dashboard prompt as system prompt
+      systemPrompt = generateDashboardPrompt(dbDoc, project.mongoConnectionString);
+      finalPrompt = 'Please start implementing the dashboard based on the instructions provided in the system prompt.';
+      console.log(`[GET /api/projects/:id/run-claude/stream] First run: Using generated dashboard prompt as system prompt`);
+    } else if (prompt) {
+      // User provided a custom message
+      systemPrompt = generateDashboardPrompt(dbDoc, project.mongoConnectionString);
+      finalPrompt = prompt as string;
+      console.log(`[GET /api/projects/:id/run-claude/stream] Custom prompt provided: "${(prompt as string).substring(0, 50)}..."`);
+    } else {
+      // Continuation with existing session
+      systemPrompt = undefined;
+      finalPrompt = (prompt as string) || 'Please continue with the dashboard implementation.';
+      console.log(`[GET /api/projects/:id/run-claude/stream] Resuming session with prompt: "${finalPrompt.substring(0, 50)}..."`);
+    }
+
+    // Import daytonaService dynamically to get the streaming method
+    const daytonaService = (await import('../services/daytonaService.js')).default;
+
+    // Stream Claude Code output
+    let allOutput = '';
+    let newSessionId: string | null = null;
+
+    try {
+      for await (const chunk of daytonaService.runClaudeCodeOnSandboxStreaming(
+        project.sandboxId,
+        anthropicApiKey,
+        finalPrompt,
+        systemPrompt,
+        project.claudeSessionId || undefined
+      )) {
+        // Send chunk to client
+        res.write(`data: ${chunk}`);
+
+        // Accumulate output for session ID extraction
+        allOutput += chunk;
+
+        // Try to extract session ID from the chunk
+        try {
+          const chunkData = JSON.parse(chunk.trim());
+          if (chunkData.session_id && !newSessionId) {
+            newSessionId = chunkData.session_id;
+            console.log(`[GET /api/projects/:id/run-claude/stream] Session ID found: ${newSessionId}`);
+          }
+        } catch {
+          // Not all chunks will be JSON, that's okay
+        }
+      }
+
+      // Update project with new session ID if found
+      if (newSessionId && newSessionId !== project.claudeSessionId) {
+        const Project = (await import('../models/Project.js')).default;
+        await Project.findByIdAndUpdate(id, { claudeSessionId: newSessionId });
+        console.log(`[GET /api/projects/:id/run-claude/stream] Saved new session ID to project: ${newSessionId}`);
+      }
+
+      // Send completion event
+      res.write(`data: ${JSON.stringify({ type: 'complete', sessionId: newSessionId || project.claudeSessionId })}\n\n`);
+      console.log(`[GET /api/projects/:id/run-claude/stream] Stream completed successfully`);
+    } catch (streamError) {
+      console.error(`[GET /api/projects/:id/run-claude/stream] Error during streaming:`, streamError);
+      res.write(`data: ${JSON.stringify({ type: 'error', message: streamError.message })}\n\n`);
+    }
+
+    res.end();
+  } catch (error) {
+    console.error(`[GET /api/projects/:id/run-claude/stream] Error setting up stream:`, error);
+
+    // Try to send error via SSE if headers not sent yet
+    if (!res.headersSent) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+    }
+
+    res.write(`data: ${JSON.stringify({ type: 'error', message: error.message || 'Failed to run Claude Code' })}\n\n`);
+    res.end();
   }
 });
 
