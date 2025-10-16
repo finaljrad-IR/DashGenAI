@@ -728,11 +728,12 @@ class DaytonaService {
             lastSize += newContent.length;
             consecutiveEmptyReads = 0;
 
-            // Yield each line separately
+            // Yield each line separately as a complete message
             const lines = newContent.split('\n');
             for (const line of lines) {
               if (line.trim()) {
-                yield line + '\n';
+                // Each line should be a complete JSON object or message
+                yield line.trim() + '\n';
               }
             }
           } else {

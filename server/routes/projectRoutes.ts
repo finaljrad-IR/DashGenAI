@@ -405,21 +405,25 @@ router.get('/:id/run-claude/stream', requireUser(), async (req: Request, res: Re
         systemPrompt,
         project.claudeSessionId || undefined
       )) {
-        // Send chunk to client
-        res.write(`data: ${chunk}`);
+        // Send chunk to client - chunk already has newline
+        // SSE format: each message must be "data: <content>\n\n"
+        const trimmedChunk = chunk.trim();
+        if (trimmedChunk) {
+          res.write(`data: ${trimmedChunk}\n\n`);
 
-        // Accumulate output for session ID extraction
-        allOutput += chunk;
+          // Accumulate output for session ID extraction
+          allOutput += trimmedChunk + '\n';
 
-        // Try to extract session ID from the chunk
-        try {
-          const chunkData = JSON.parse(chunk.trim());
-          if (chunkData.session_id && !newSessionId) {
-            newSessionId = chunkData.session_id;
-            console.log(`[GET /api/projects/:id/run-claude/stream] Session ID found: ${newSessionId}`);
+          // Try to extract session ID from the chunk
+          try {
+            const chunkData = JSON.parse(trimmedChunk);
+            if (chunkData.session_id && !newSessionId) {
+              newSessionId = chunkData.session_id;
+              console.log(`[GET /api/projects/:id/run-claude/stream] Session ID found: ${newSessionId}`);
+            }
+          } catch {
+            // Not all chunks will be JSON, that's okay
           }
-        } catch {
-          // Not all chunks will be JSON, that's okay
         }
       }
 

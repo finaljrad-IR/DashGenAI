@@ -184,8 +184,14 @@ export const sendChatMessageStreaming = (
 
   eventSource.onmessage = (event) => {
     try {
-      console.log('[sendChatMessageStreaming] Received chunk:', event.data.substring(0, 100));
-      const data = JSON.parse(event.data);
+      const trimmedData = event.data.trim();
+      if (!trimmedData) {
+        console.log('[sendChatMessageStreaming] Received empty chunk, skipping');
+        return;
+      }
+
+      console.log('[sendChatMessageStreaming] Received chunk:', trimmedData.substring(0, 100));
+      const data = JSON.parse(trimmedData);
 
       // Extract session ID if present
       if (data.session_id && !sessionId) {
@@ -213,7 +219,8 @@ export const sendChatMessageStreaming = (
       onChunk(data);
     } catch (parseError) {
       console.error('[sendChatMessageStreaming] Error parsing chunk:', parseError);
-      // Don't close on parse errors, some chunks might not be JSON
+      console.error('[sendChatMessageStreaming] Problematic data:', event.data);
+      // Don't close on parse errors, but log them clearly
     }
   };
 
