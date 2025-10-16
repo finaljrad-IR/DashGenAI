@@ -117,6 +117,22 @@ export function parseClaudeOutput(output: string): ParsedClaudeMessage[] {
       if (data.type === 'assistant') {
         const contentItems = data.message?.content || [];
 
+        // Ignore messages that ONLY contain tool_result types
+        const hasOnlyToolResults = contentItems.length > 0 &&
+          contentItems.every(item => item.type === 'tool_result');
+
+        if (hasOnlyToolResults) {
+          messages.push({
+            id: data.uuid || `tool-result-${Date.now()}-${Math.random()}`,
+            messageType: 'system',
+            title: 'Tool Result',
+            timestamp: Date.now(),
+            shouldIgnore: true,
+            rawData: data,
+          });
+          continue;
+        }
+
         // Check if any content item has a name (tool usage) or is a tool_result
         const toolItems = contentItems.filter(item => item.name && item.type !== 'tool_result');
 

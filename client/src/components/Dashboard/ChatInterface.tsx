@@ -28,6 +28,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [claudeResponses, setClaudeResponses] = useState<ParsedClaudeMessage[]>([]);
+  const [displayedResponses, setDisplayedResponses] = useState<ParsedClaudeMessage[]>([]);
   const [hasReceivedFirstMessage, setHasReceivedFirstMessage] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollViewportRef = useRef<HTMLDivElement>(null);
@@ -72,6 +73,31 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
     }
   };
 
+  // Process claude responses - when a new non-ignored message arrives, mark all previous as completed
+  useEffect(() => {
+    const visibleResponses = claudeResponses.filter(r => !r.shouldIgnore);
+
+    if (visibleResponses.length > 0) {
+      // Mark that we've received the first visible message
+      if (!hasReceivedFirstMessage) {
+        setHasReceivedFirstMessage(true);
+      }
+
+      // Update all previous messages to remove "in_progress" status when a new message arrives
+      const updatedResponses = visibleResponses.map((response, index) => {
+        // Keep "in_progress" only for the last message, remove it from all others
+        if (index < visibleResponses.length - 1 && response.status === 'in_progress') {
+          return { ...response, status: 'completed' as const };
+        }
+        return response;
+      });
+
+      setDisplayedResponses(updatedResponses);
+    } else {
+      setDisplayedResponses([]);
+    }
+  }, [claudeResponses, hasReceivedFirstMessage]);
+
   // Auto-scroll effect - only scroll if user was already at bottom
   useEffect(() => {
     const wasAtBottom = isScrolledToBottom();
@@ -79,7 +105,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
       // Small delay to ensure DOM has updated
       setTimeout(scrollToBottom, 10);
     }
-  }, [messages, claudeResponses]);
+  }, [messages, displayedResponses]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,6 +123,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
     setInputMessage('')
     setIsSending(true)
     setClaudeResponses([]) // Clear previous Claude responses
+    setDisplayedResponses([]) // Clear displayed responses
     setHasReceivedFirstMessage(false) // Reset for new message
 
     // Store raw output for parsing
@@ -112,11 +139,6 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
         // onChunk callback - handle each chunk as it arrives
         (data) => {
           console.log('[ChatInterface] Received chunk:', data)
-
-          // Mark that we've received the first message
-          if (!hasReceivedFirstMessage) {
-            setHasReceivedFirstMessage(true)
-          }
 
           // Accumulate raw output
           const chunkStr = JSON.stringify(data)
@@ -229,7 +251,7 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
                 </div>
               ))}
 
-              {/* Show "Claude Code is working..." only if sending and no messages received yet */}
+              {/* Show "Running claude code..." only if sending and no visible messages received yet */}
               {isSending && !hasReceivedFirstMessage && (
                 <div className="flex gap-3 animate-in fade-in slide-in-from-bottom-2">
                   <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800">
@@ -238,21 +260,19 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
                   <Card className="p-3 bg-card border">
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="text-sm text-muted-foreground">Claude Code is working...</span>
+                      <span className="text-sm text-muted-foreground">Running claude code...</span>
                     </div>
                   </Card>
                 </div>
               )}
 
               {/* Claude Code Responses */}
-              {claudeResponses.length > 0 && (
+              {displayedResponses.length > 0 && (
                 <div className="mt-4 space-y-3">
-                  {claudeResponses.map((response) => (
-                    !response.shouldIgnore && (
-                      <div key={response.id} className="animate-in fade-in slide-in-from-bottom-2">
-                        <CodexMessage message={response} />
-                      </div>
-                    )
+                  {displayedResponses.map((response) => (
+                    <div key={response.id} className="animate-in fade-in slide-in-from-bottom-2">
+                      <CodexMessage message={response} />
+                    </div>
                   ))}
                 </div>
               )}
