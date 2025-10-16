@@ -113,6 +113,27 @@ export function parseClaudeOutput(output: string): ParsedClaudeMessage[] {
         continue;
       }
 
+      // Rule 1.5: Ignore messages with type "user" that contain only tool_result items
+      if (data.type === 'user') {
+        const contentItems = data.message?.content || [];
+
+        // Ignore messages that ONLY contain tool_result types
+        const hasOnlyToolResults = contentItems.length > 0 &&
+          contentItems.every(item => item.type === 'tool_result');
+
+        if (hasOnlyToolResults) {
+          messages.push({
+            id: data.uuid || `user-tool-result-${Date.now()}-${Math.random()}`,
+            messageType: 'system',
+            title: 'User Tool Result',
+            timestamp: Date.now(),
+            shouldIgnore: true,
+            rawData: data,
+          });
+          continue;
+        }
+      }
+
       // Rule 2: Handle messages with type "assistant"
       if (data.type === 'assistant') {
         const contentItems = data.message?.content || [];
