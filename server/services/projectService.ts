@@ -44,7 +44,7 @@ class ProjectService {
         const renderedOutputPath = await TemplateService.renderTemplateToTemp({
           project_name: input.name,
           options: {
-            auth: true, // Always true as per requirements
+            auth: false, // Always true as per requirements
             db_type: 'nosql', // Always 'nosql' as per requirements
           },
         });
@@ -181,7 +181,7 @@ class ProjectService {
           const renderedOutputPath = await TemplateService.renderTemplateToTemp({
             project_name: project.name,
             options: {
-              auth: true, // Always true as per requirements
+              auth: false, // Always true as per requirements
               db_type: 'nosql', // Always 'nosql' as per requirements
             },
           });
