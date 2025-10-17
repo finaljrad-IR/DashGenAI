@@ -20,7 +20,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/invite/accept/:token" element={<AcceptInvitation />} />
+          <Route path="/accept-invitation/:token" element={<AcceptInvitation />} />
           <Route path="/" element={<Home />} />
           <Route path="/my-dashboards" element={<ProtectedRoute><Layout><MyDashboards /></Layout></ProtectedRoute>} />
           <Route path="/dashboard/:id" element={<ProtectedRoute><DashboardOwner /></ProtectedRoute>} />
