@@ -635,6 +635,36 @@ class DaytonaService {
   }
 
   /**
+   * Read application logs from the sandbox
+   * Reads the last N lines from the application log file
+   */
+  async readApplicationLogs(sandboxId: string, lines: number = 500): Promise<string> {
+    console.log(`[DaytonaService] Reading last ${lines} lines of application logs from sandbox ${sandboxId}`);
+
+    try {
+      // Get or reconnect to the sandbox
+      const sandbox = await this.getOrReconnectSandbox(sandboxId);
+
+      // Read the last N lines from the app log file
+      const command = `tail -n ${lines} /tmp/app.log 2>/dev/null || echo "No logs available"`;
+      const result = await sandbox.process.executeCommand(command);
+
+      if (!result || !result.result) {
+        console.log(`[DaytonaService] No application logs found`);
+        return 'No application logs available yet.';
+      }
+
+      const logs = result.result.trim();
+      console.log(`[DaytonaService] Retrieved ${logs.split('\n').length} lines of application logs`);
+
+      return logs;
+    } catch (error) {
+      console.error(`[DaytonaService] Error reading application logs:`, error);
+      return `Error reading logs: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    }
+  }
+
+  /**
    * Run Claude Code on the sandbox with real-time streaming output
    * Returns an async generator that yields log chunks as they become available
    */

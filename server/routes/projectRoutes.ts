@@ -4,7 +4,6 @@ import ProjectService from '../services/projectService.js';
 import TemplateService from '../services/templateService.js';
 import CodexMessageService from '../services/codexMessageService.js';
 import ChatMessage from '../models/ChatMessage.js';
-import { logCapture } from '../utils/logCapture.js';
 
 const router = express.Router();
 
@@ -423,10 +422,16 @@ router.get('/:id/run-claude/stream', requireUser(), async (req: Request, res: Re
     // Import daytonaService dynamically to get the streaming method
     const daytonaService = (await import('../services/daytonaService.js')).default;
 
-    // Capture application logs (last 1000 lines)
-    console.log(`[GET /api/projects/:id/run-claude/stream] Capturing application logs...`);
-    const appLogs = logCapture.getLastLogs(1000);
-    console.log(`[GET /api/projects/:id/run-claude/stream] Captured ${appLogs === 'No application logs available yet.' ? '0' : 'application'} logs`);
+    // Capture application logs from the Daytona sandbox (last 500 lines)
+    console.log(`[GET /api/projects/:id/run-claude/stream] Reading application logs from sandbox...`);
+    let appLogs = '';
+    try {
+      appLogs = await daytonaService.readApplicationLogs(project.sandboxId, 500);
+      console.log(`[GET /api/projects/:id/run-claude/stream] Retrieved ${appLogs.split('\n').length} lines of application logs`);
+    } catch (logError) {
+      console.error(`[GET /api/projects/:id/run-claude/stream] Error reading application logs:`, logError);
+      appLogs = 'Unable to retrieve application logs.';
+    }
 
     // Stream Claude Code output
     let allOutput = '';

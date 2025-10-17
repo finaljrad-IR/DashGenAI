@@ -8,7 +8,6 @@ import codexRoutes from './routes/codexRoutes.js';
 import invitationRoutes from './routes/invitationRoutes.js';
 import { connectDB } from './config/database.js';
 import cors from 'cors';
-import { logCapture } from './utils/logCapture.js';
 
 // Load environment variables
 dotenv.config();
@@ -63,37 +62,4 @@ app.use((err: Error, req: Request, res: Response) => {
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
-
-  // Initialize log capture for console output
-  console.log('[LogCapture] Initializing log capture for server process');
-
-  // Override console.log to capture stdout
-  const originalLog = console.log;
-  console.log = (...args: any[]) => {
-    const message = args.map(arg =>
-      typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-    ).join(' ');
-
-    // Send to logCapture
-    logCapture.addLog('server', 'stdout', message);
-
-    // Call original console.log
-    originalLog.apply(console, args);
-  };
-
-  // Override console.error to capture stderr
-  const originalError = console.error;
-  console.error = (...args: any[]) => {
-    const message = args.map(arg =>
-      typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-    ).join(' ');
-
-    // Send to logCapture
-    logCapture.addLog('server', 'stderr', message);
-
-    // Call original console.error
-    originalError.apply(console, args);
-  };
-
-  console.log('[LogCapture] Log capture initialized successfully');
 });
