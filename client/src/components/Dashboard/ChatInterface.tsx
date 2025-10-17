@@ -159,30 +159,38 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
         async (sessionId) => {
           console.log('[ChatInterface] Stream completed, session ID:', sessionId);
 
+          // Parse the accumulated output one more time to get the final iteration
+          const parsedResponses = parseClaudeOutput(rawOutput);
+          const finalIteration = parsedResponses.length > 0 ? parsedResponses[parsedResponses.length - 1] : null;
+
+          console.log('[ChatInterface] Final iteration:', finalIteration);
+
           // Save the completed iteration message to database if we have one and projectId
-          if (currentIteration && projectId) {
+          if (finalIteration && projectId) {
             try {
               console.log('[ChatInterface] Saving completed iteration message to database');
               await saveChatMessage(projectId, {
                 messageType: 'iteration_completed',
-                content: currentIteration.currentAction || 'Iteration completed',
+                content: finalIteration.currentAction || 'Iteration completed',
                 metadata: {
                   sessionId,
-                  resultDescription: currentIteration.resultDescription,
-                  currentAction: currentIteration.currentAction,
-                  icon: currentIteration.icon,
+                  resultDescription: finalIteration.resultDescription,
+                  currentAction: finalIteration.currentAction,
+                  icon: finalIteration.icon,
                   hasCompleted: true,
                 },
               });
               console.log('[ChatInterface] Iteration message saved successfully');
 
               // Move current iteration to completed list
-              setCompletedIterations(prev => [...prev, currentIteration]);
+              setCompletedIterations(prev => [...prev, finalIteration]);
               setCurrentIteration(null);
             } catch (error) {
               console.error('[ChatInterface] Error saving iteration message:', error);
               // Don't show error toast, just log it
             }
+          } else {
+            console.warn('[ChatInterface] No final iteration to save or no projectId');
           }
 
           setIsSending(false);
