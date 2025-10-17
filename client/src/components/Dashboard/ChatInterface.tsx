@@ -46,27 +46,45 @@ export function ChatInterface({ dashboardId, projectId, onDashboardUpdate }: Cha
       const chatMessages = await getChatMessages(projectId);
 
       console.log('[ChatInterface] Loaded chat messages:', chatMessages.length);
+      console.log('[ChatInterface] Raw chat messages:', JSON.stringify(chatMessages, null, 2));
 
       // Convert persisted messages to display format
       const userMessages: Message[] = [];
       const iterationMessages: ParsedClaudeMessage[] = [];
 
-      chatMessages.forEach((msg: PersistedChatMessage) => {
+      chatMessages.forEach((msg: PersistedChatMessage, index) => {
+        console.log(`[ChatInterface] Processing message ${index}:`, {
+          messageType: msg.messageType,
+          hasMetadata: !!msg.metadata,
+          metadata: msg.metadata,
+          contentPreview: msg.content.substring(0, 100)
+        });
+
         if (msg.messageType === 'user') {
+          console.log(`[ChatInterface] Adding user message ${index}`);
           userMessages.push({
             _id: msg._id,
             role: 'user',
             content: msg.content,
             timestamp: msg.createdAt,
           });
-        } else if (msg.messageType === 'iteration_completed' && msg.metadata) {
-          // Reconstruct the iteration message from metadata
-          iterationMessages.push({
-            currentAction: msg.metadata.currentAction || msg.content,
-            resultDescription: msg.metadata.resultDescription || '',
-            icon: msg.metadata.icon || '✅',
-            hasCompleted: true,
-          });
+        } else if (msg.messageType === 'iteration_completed') {
+          console.log(`[ChatInterface] Found iteration_completed message ${index}`);
+          if (msg.metadata) {
+            console.log('[ChatInterface] Metadata exists, reconstructing iteration message:', msg.metadata);
+            // Reconstruct the iteration message from metadata
+            iterationMessages.push({
+              currentAction: msg.metadata.currentAction || msg.content,
+              resultDescription: msg.metadata.resultDescription || '',
+              icon: msg.metadata.icon || '✅',
+              hasCompleted: true,
+            });
+            console.log('[ChatInterface] Iteration message added to array');
+          } else {
+            console.warn('[ChatInterface] Iteration message has NO metadata:', msg);
+          }
+        } else {
+          console.log(`[ChatInterface] Skipping message ${index} with type: ${msg.messageType}`);
         }
       });
 
