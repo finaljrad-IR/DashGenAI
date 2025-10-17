@@ -8,7 +8,7 @@ const router = express.Router();
 // Endpoint: POST /api/invitations/send
 // Request: { projectId: string, emails: string[], message?: string }
 // Response: { success: string[], failed: string[], message: string }
-router.post('/send', requireUser, async (req: Request, res: Response) => {
+router.post('/send', requireUser(), async (req: Request, res: Response) => {
   try {
     const { projectId, emails, message } = req.body;
 
@@ -55,34 +55,44 @@ router.post('/send', requireUser, async (req: Request, res: Response) => {
   }
 });
 
-// Description: Get invitation details by token
-// Endpoint: GET /api/invitations/:token
+// Description: Get all dashboards shared with the current user
+// Endpoint: GET /api/invitations/shared-dashboards
 // Request: {}
-// Response: { invitation: { email: string, projectName: string, invitedBy: string, message?: string } }
-router.get('/:token', async (req: Request, res: Response) => {
+// Response: { dashboards: Array<{ _id: string, name: string, status: string, sharedBy: string, sharedAt: Date, accessLevel: string }> }
+router.get('/shared-dashboards', requireUser(), async (req: Request, res: Response) => {
   try {
-    const { token } = req.params;
+    console.log(`📊 Fetching shared dashboards for user ${req.user._id}`);
 
-    console.log(`🔍 Fetching invitation details for token: ${token}`);
+    const dashboards = await invitationService.getSharedDashboards(req.user._id.toString());
 
-    const invitation = await invitationService.getInvitationByToken(token);
-
-    if (!invitation) {
-      return res.status(404).json({ error: 'Invitation not found or expired' });
-    }
-
-    res.status(200).json({
-      invitation: {
-        email: invitation.email,
-        projectName: (invitation.projectId as { name: string }).name,
-        invitedBy: (invitation.invitedBy as { email: string }).email,
-        message: invitation.message,
-      },
-    });
+    res.status(200).json({ dashboards });
   } catch (error: unknown) {
-    console.error('❌ Error fetching invitation:', error);
+    console.error('❌ Error fetching shared dashboards:', error);
     const err = error as Error;
-    res.status(500).json({ error: err.message || 'Failed to fetch invitation' });
+    res.status(500).json({ error: err.message || 'Failed to fetch shared dashboards' });
+  }
+});
+
+// Description: Get users who have access to a project
+// Endpoint: GET /api/invitations/project/:projectId/users
+// Request: {}
+// Response: { users: Array<{ email: string, sharedBy: string, sharedAt: Date, accessLevel: string }> }
+router.get('/project/:projectId/users', requireUser(), async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params;
+
+    console.log(`👥 Fetching shared users for project ${projectId}`);
+
+    const users = await invitationService.getProjectSharedUsers(
+      projectId,
+      req.user._id.toString()
+    );
+
+    res.status(200).json({ users });
+  } catch (error: unknown) {
+    console.error('❌ Error fetching project users:', error);
+    const err = error as Error;
+    res.status(500).json({ error: err.message || 'Failed to fetch project users' });
   }
 });
 
@@ -112,44 +122,34 @@ router.post('/:token/accept', async (req: Request, res: Response) => {
   }
 });
 
-// Description: Get all dashboards shared with the current user
-// Endpoint: GET /api/invitations/shared-dashboards
+// Description: Get invitation details by token
+// Endpoint: GET /api/invitations/:token
 // Request: {}
-// Response: { dashboards: Array<{ _id: string, name: string, status: string, sharedBy: string, sharedAt: Date, accessLevel: string }> }
-router.get('/shared-dashboards', requireUser, async (req: Request, res: Response) => {
+// Response: { invitation: { email: string, projectName: string, invitedBy: string, message?: string } }
+router.get('/:token', async (req: Request, res: Response) => {
   try {
-    console.log(`📊 Fetching shared dashboards for user ${req.user._id}`);
+    const { token } = req.params;
 
-    const dashboards = await invitationService.getSharedDashboards(req.user._id.toString());
+    console.log(`🔍 Fetching invitation details for token: ${token}`);
 
-    res.status(200).json({ dashboards });
+    const invitation = await invitationService.getInvitationByToken(token);
+
+    if (!invitation) {
+      return res.status(404).json({ error: 'Invitation not found or expired' });
+    }
+
+    res.status(200).json({
+      invitation: {
+        email: invitation.email,
+        projectName: (invitation.projectId as { name: string }).name,
+        invitedBy: (invitation.invitedBy as { email: string }).email,
+        message: invitation.message,
+      },
+    });
   } catch (error: unknown) {
-    console.error('❌ Error fetching shared dashboards:', error);
+    console.error('❌ Error fetching invitation:', error);
     const err = error as Error;
-    res.status(500).json({ error: err.message || 'Failed to fetch shared dashboards' });
-  }
-});
-
-// Description: Get users who have access to a project
-// Endpoint: GET /api/invitations/project/:projectId/users
-// Request: {}
-// Response: { users: Array<{ email: string, sharedBy: string, sharedAt: Date, accessLevel: string }> }
-router.get('/project/:projectId/users', requireUser, async (req: Request, res: Response) => {
-  try {
-    const { projectId } = req.params;
-
-    console.log(`👥 Fetching shared users for project ${projectId}`);
-
-    const users = await invitationService.getProjectSharedUsers(
-      projectId,
-      req.user._id.toString()
-    );
-
-    res.status(200).json({ users });
-  } catch (error: unknown) {
-    console.error('❌ Error fetching project users:', error);
-    const err = error as Error;
-    res.status(500).json({ error: err.message || 'Failed to fetch project users' });
+    res.status(500).json({ error: err.message || 'Failed to fetch invitation' });
   }
 });
 
