@@ -5,6 +5,7 @@ import basicRoutes from './routes/index.js';
 import authRoutes from './routes/authRoutes.js';
 import projectRoutes from './routes/projectRoutes.js';
 import codexRoutes from './routes/codexRoutes.js';
+import invitationRoutes from './routes/invitationRoutes.js';
 import { connectDB } from './config/database.js';
 import cors from 'cors';
 
@@ -44,6 +45,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 // Codex Routes
 app.use('/api/codex', codexRoutes);
+// Invitation Routes
+app.use('/api/invitations', invitationRoutes);
 
 // If no routes handled the request, it's a 404
 app.use((req: Request, res: Response) => {

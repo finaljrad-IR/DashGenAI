@@ -100,6 +100,34 @@ router.get('/:id', requireUser(), async (req: Request, res: Response) => {
   }
 });
 
+// Description: Get project by ID with permission check (for shared access)
+// Endpoint: GET /api/projects/:id/with-permissions
+// Request: {}
+// Response: { project: Project, isOwner: boolean, accessLevel: string }
+router.get('/:id/with-permissions', requireUser(), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    console.log(`🔍 Fetching project ${id} with permissions for user ${req.user._id}`);
+
+    const project = await ProjectService.getProjectByIdWithPermissionCheck(
+      id,
+      req.user._id.toString()
+    );
+
+    res.status(200).json({ project });
+  } catch (error: unknown) {
+    console.error(`❌ Error fetching project with permissions:`, error);
+    const err = error as Error;
+
+    if (err.message.includes('permission')) {
+      return res.status(403).json({ error: err.message });
+    }
+
+    res.status(500).json({ error: err.message || 'Failed to fetch project' });
+  }
+});
+
 // Description: Update a project
 // Endpoint: PUT /api/projects/:id
 // Request: { name?: string, mongoConnectionString?: string, databaseName?: string, templateData?: Record<string, any> }

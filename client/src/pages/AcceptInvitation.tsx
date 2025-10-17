@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { getInvitationDetails, acceptInvitation } from "@/api/invitations";
+import { getInvitationByToken, acceptInvitation } from "@/api/invitations";
 import { useToast } from "@/hooks/useToast";
 
 interface FormData {
@@ -20,8 +20,9 @@ export function AcceptInvitation() {
   const navigate = useNavigate();
   const [invitation, setInvitation] = useState<{
     email: string
-    dashboardName: string
-    inviterEmail: string
+    projectName: string
+    invitedBy: string
+    message?: string
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,8 +39,8 @@ export function AcceptInvitation() {
 
     setIsLoading(true)
     try {
-      const response = await getInvitationDetails(token)
-      setInvitation(response)
+      const response = await getInvitationByToken(token)
+      setInvitation(response.invitation)
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load invitation details'
       toast({
@@ -95,8 +96,12 @@ export function AcceptInvitation() {
     try {
       const response = await acceptInvitation(token, data.password)
 
+      // Store both access and refresh tokens
       if (response.accessToken) {
         localStorage.setItem('accessToken', response.accessToken)
+      }
+      if (response.refreshToken) {
+        localStorage.setItem('refreshToken', response.refreshToken)
       }
 
       toast({
@@ -105,7 +110,7 @@ export function AcceptInvitation() {
       })
 
       setTimeout(() => {
-        navigate(`/dashboard/${response.dashboardId}/shared`)
+        navigate(`/dashboard/${response.project._id}/shared`)
       }, 1000)
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to accept invitation'
@@ -150,10 +155,10 @@ export function AcceptInvitation() {
           </div>
           <CardTitle className="text-2xl font-bold text-center">You've Been Invited!</CardTitle>
           <CardDescription className="text-center">
-            <strong>{invitation.inviterEmail}</strong> invited you to view their dashboard
+            <strong>{invitation.invitedBy}</strong> invited you to view their dashboard
             <br />
             <span className="text-lg font-semibold text-foreground mt-2 block">
-              {invitation.dashboardName}
+              {invitation.projectName}
             </span>
           </CardDescription>
           {invitation.message && (

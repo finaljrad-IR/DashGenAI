@@ -353,6 +353,45 @@ class ProjectService {
   }
 
   /**
+   * Get a project by ID with permission check (for shared access)
+   */
+  async getProjectByIdWithPermissionCheck(
+    projectId: string,
+    userId: string
+  ): Promise<any> {
+    try {
+      console.log(`🔍 Fetching project ${projectId} for user ${userId} with permission check`);
+
+      const project = await Project.findById(projectId);
+      if (!project) {
+        console.error(`❌ Project not found: ${projectId}`);
+        throw new Error('Project not found');
+      }
+
+      // Check if user is owner
+      const isOwner = project.userId.toString() === userId;
+
+      // Check if user has shared access
+      const invitationService = await import('./invitationService.js');
+      const hasSharedAccess = await invitationService.default.hasAccess(userId, projectId);
+
+      if (!isOwner && !hasSharedAccess) {
+        console.error(`❌ User ${userId} does not have access to project ${projectId}`);
+        throw new Error('You do not have permission to access this project');
+      }
+
+      return {
+        ...project.toJSON(),
+        isOwner,
+        accessLevel: isOwner ? 'owner' : 'viewer',
+      };
+    } catch (error) {
+      console.error(`[ProjectService] Error fetching project with permissions: ${error.message}`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Run Claude Code on a project's sandbox
    */
   async runClaudeCodeOnProject(projectId: string, userId: string, customPrompt?: string): Promise<{

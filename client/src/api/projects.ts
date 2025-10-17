@@ -75,6 +75,29 @@ export const getProjectById = async (id: string): Promise<Project> => {
   }
 };
 
+// Description: Get a specific project by ID with permission check (for shared access)
+// Endpoint: GET /api/projects/:id/with-permissions
+// Request: {}
+// Response: { project: Project, isOwner: boolean, accessLevel: string }
+export const getProjectWithPermissions = async (id: string): Promise<{
+  project: Project;
+  isOwner: boolean;
+  accessLevel: string;
+}> => {
+  try {
+    const response = await api.get(`/api/projects/${id}/with-permissions`);
+    return {
+      project: response.data.project,
+      isOwner: response.data.isOwner,
+      accessLevel: response.data.accessLevel,
+    };
+  } catch (error: unknown) {
+    console.error('Error fetching project with permissions:', error);
+    const err = error as { response?: { data?: { error?: string } }; message?: string };
+    throw new Error(err?.response?.data?.error || err?.message || 'Failed to fetch project');
+  }
+};
+
 // Description: Update a project
 // Endpoint: PUT /api/projects/:id
 // Request: { name?: string, mongoConnectionString?: string, databaseName?: string, templateData?: Record<string, unknown> }

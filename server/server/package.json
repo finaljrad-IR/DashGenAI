@@ -1,0 +1,5 @@
+{
+  "devDependencies": {
+    "@types/postmark": "^1.4.1"
+  }
+}

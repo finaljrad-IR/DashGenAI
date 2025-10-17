@@ -44,6 +44,7 @@
     "nunjucks": "^3.2.4",
     "openai": "^4.63.0",
     "pino": "^9.5.0",
+    "postmark": "^4.0.5",
     "shared": "file:../shared"
   },
   "devDependencies": {

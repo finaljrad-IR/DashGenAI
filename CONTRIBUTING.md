@@ -123,7 +123,7 @@ export const Button: React.FC<ButtonProps> = ({ label, onClick, variant = 'prima
 
 ```typescript
 // Good - Route handler delegates to service
-router.post('/projects', requireUser, async (req, res) => {
+router.post('/projects', requireUser(), async (req, res) => {
   try {
     const project = await ProjectService.createProject(req.user._id, req.body);
     res.status(201).json({ project });

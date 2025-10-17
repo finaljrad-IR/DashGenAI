@@ -2,9 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Loader2, Eye } from "lucide-react";
 import { DashboardViewer } from "@/components/Dashboard/DashboardViewer";
-import { getDashboard } from "@/api/dashboards";
+import { getProjectWithPermissions } from "@/api/projects";
 import { useToast } from "@/hooks/useToast";
-import { Card } from "@/components/ui/card";
 
 export function DashboardShared() {
   const { id } = useParams<{ id: string }>();
@@ -20,8 +19,11 @@ export function DashboardShared() {
 
     setIsLoading(true)
     try {
-      const response = await getDashboard(id)
-      setDashboard(response)
+      const response = await getProjectWithPermissions(id)
+      setDashboard({
+        name: response.project.name,
+        previewUrl: response.project.sandboxUrl || '',
+      })
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboard'
       toast({
