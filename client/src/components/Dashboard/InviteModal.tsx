@@ -72,7 +72,7 @@ export function InviteModal({ isOpen, onClose, dashboardId }: InviteModalProps) 
     setIsLoading(true)
     try {
       await sendInvitations({
-        dashboardId,
+        projectId: dashboardId,
         emails,
         message: message.trim() || undefined,
       })
