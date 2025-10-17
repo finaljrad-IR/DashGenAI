@@ -181,8 +181,8 @@ class InvitationService {
     if (!user) {
       // Create new user
       console.log(`👤 Creating new user for ${invitation.email}`);
-      const { hashPassword } = await import('../utils/password');
-      const hashedPassword = await hashPassword(password);
+      const { generatePasswordHash } = await import('../utils/password');
+      const hashedPassword = await generatePasswordHash(password);
 
       user = await User.create({
         email: invitation.email,
@@ -219,8 +219,9 @@ class InvitationService {
     console.log(`✅ Invitation marked as accepted`);
 
     // Generate tokens
-    const { generateTokens } = await import('../utils/auth');
-    const { accessToken, refreshToken } = generateTokens(user._id.toString());
+    const { generateAccessToken, generateRefreshToken } = await import('../utils/auth');
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
 
     // Update refresh token in database
     user.refreshToken = refreshToken;
