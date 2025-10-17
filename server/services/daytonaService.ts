@@ -643,7 +643,8 @@ class DaytonaService {
     anthropicApiKey: string,
     prompt: string,
     systemPrompt?: string,
-    existingSessionId?: string
+    existingSessionId?: string,
+    appLogs?: string
   ): AsyncGenerator<string, void, unknown> {
     console.log(`[DaytonaService] Starting Claude Code streaming on sandbox ${sandboxId}`);
     console.log(`[DaytonaService] Existing session ID: ${existingSessionId || 'None (new session)'}`);
@@ -672,12 +673,22 @@ class DaytonaService {
       yield JSON.stringify({ type: 'status', message: 'Setting up authentication...' }) + '\n';
       await this.setupClaudeAuthentication(sandboxId, anthropicApiKey);
 
-      // Step 3: Build the Claude Code command
+      // Step 3: Build the Claude Code command with app logs
       console.log(`[DaytonaService] Executing Claude Code with prompt`);
       yield JSON.stringify({ type: 'status', message: 'Starting Claude Code execution...' }) + '\n';
 
+      // Construct the enhanced prompt with app logs
+      let enhancedPrompt = prompt;
+
+      if (appLogs && appLogs.trim().length > 0) {
+        console.log(`[DaytonaService] Appending application logs to prompt (${appLogs.length} characters)`);
+        enhancedPrompt = `${prompt}\n\n---\n\n## Application Logs (Last 1000 lines)\n\n\`\`\`\n${appLogs}\n\`\`\``;
+      } else {
+        console.log(`[DaytonaService] No application logs to append`);
+      }
+
       // Escape the prompt for command line
-      const escapedPrompt = prompt.replace(/'/g, "'\\''").replace(/\n/g, ' ');
+      const escapedPrompt = enhancedPrompt.replace(/'/g, "'\\''").replace(/\n/g, ' ');
 
       // Build command parts - output to a log file so we can tail it
       const logFile = `/tmp/claude-${Date.now()}.log`;
